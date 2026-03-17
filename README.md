@@ -6,7 +6,8 @@
 NonSteamLaunchers 🚀
 </h1>
 
-This script installs the latest UMU & GE-Proton and installs NonSteamLaunchers under one unique Proton prefix folder in your compatdata folder path called "NonSteamLaunchers" and adds them to your Steam Library. It will also add the games automatically in real time and will attempt to remove the games from your library in real time when you uninstall a game from a launcher. Collections for your games will also be created per launcher.
+This script installs the latest UMU & GE-Proton and installs NonSteamLaunchers under one unique Proton prefix folder in your compatdata folder path called "NonSteamLaunchers" and adds them to your Steam Library. It will also add the games automatically in real time and will attempt to remove the games from your library in real time when you uninstall a game from a launcher. Collections for your games, launchers and web shortcuts will also be created/removed per launcher. Play time is tracked for all non steam games as well as boot videos downloaded per shortcut if any exist. Non-Downloadable Game theme music is also applied to your library. Metadata cards are also applied to your library automatically to give your non steam pages some life!
+Special ".desktop" files will be created per shortcut allowing you to run the games and launchers outside of Steam as well.
 NSL can be used on Desktop or in Game Mode, and don't you worry,
 Local Saves and Cloud saves are supported, as well as multiplayer/online support (because you're using the launchers). Obviously, certain anticheat games will not work on linux enviroments; this is on a game to game basis.
 
@@ -14,7 +15,7 @@ Local Saves and Cloud saves are supported, as well as multiplayer/online support
 Features  ✅
 </h1>
 
-- Automatic installation of the most popular launchers in your Steam Deck 🎮
+- Automatic installation of the most popular launchers for your Steam Deck and Steam Machine on SteamOS 🎮
 
 - Handle automatically the download and installation of your chosen launchers and the games, artwork included! ⌚️ 
 
@@ -30,9 +31,14 @@ Features  ✅
 
 - RemotePlayWhatever is also bundled with NSL to allow for local and co-op play between non steam games, this is created by m4Engi, here is the repo [here](https://github.com/m4dEngi/RemotePlayWhatever)
 
-- Ludusavi is also pre-installed and setup for NSL for your games save backups. Not all games will work with this yet so bare this in mind when deleted or uninstalling games that are arent backed up yet, here is the repo [here](https://github.com/mtkennerly/ludusavi)
+- Ludusavi is also pre-installed and setup for NSL for your games save backups. Not all games will work with this yet so bear this in mind when deleted or uninstalling games that are arent backed up yet, here is the repo [here](https://github.com/mtkennerly/ludusavi)
 
 In both versions of NonSteamLaunchers, Desktop or Decky, NSL will back up your games saves here automatically ```/home/deck/NSLGameSaves``` The Desktop Version only does this once, at the start of when the script is opened and you see the main options list. The decky plugin version does this on every manual scan that you do.
+
+
+-Pressing "Update Proton GE" in both the Desktop version or the Decky Plugin version, will give you the latest version of Proton GE and UMU. A patch will also be applied to allow Game Streaming from Discord in Game Mode.
+
+- Pressing the "Music Button" on the top left of your game page will enable/disble the Game Theme Feature. This simply attempts to play your games theme music in the client! You can even change the music if you dont like it with the paste button!. Clicking the button will hide and disable the feature.
 
 - [UMU Launcher](https://github.com/Open-Wine-Components/umu-launcher) is automatically used and is processed for each game and Launcher. Proton GE will be used where necessary.
 
@@ -59,6 +65,8 @@ just to name a few!...there are much more videos and articles out there just wan
 - [Goldenoptic Gaming](https://www.youtube.com/watch?v=dMnUn3U0dPE)
 - [Deck Ready](https://www.youtube.com/watch?v=9Ap_suofBV8&t=196s) (starting at 3:16)
 - [Steam Deck Checker](https://www.youtube.com/watch?v=vFRllG15jjs)
+- [SteamDeckHQ](https://www.tiktok.com/@steamdeckhq/video/7579970230265384223)
+- [ChoiTech](https://www.youtube.com/watch?v=ucrVWJNQ2rc)
 
 ## Articles
 - [Gaming On Linux - Non-Steam Launchers Tool for Installing Popular Game Stores](https://www.gamingonlinux.com/2025/01/nonsteamlaunchers-tool-for-installing-popular-game-stores-working-on-better-desktop-linux-support/)
@@ -67,6 +75,7 @@ just to name a few!...there are much more videos and articles out there just wan
 - [Dexerto - Non-Steam Launchers on Steam Deck](https://www.dexerto.com/tech/nonsteamlaunchers-steam-deck-2808063/)
 - [MSN - Steam Deck: How to Install Epic Games Launcher with Decky Loader](https://www.msn.com/en-ca/news/technology/steam-deck-how-to-install-epic-games-launcher-with-decky-loader/ar-BB1pW1Ht)
 - [PCMAG - How to Install Third-Party Game Launchers on Steam Deck](https://www.pcmag.com/how-to/steam-deck-install-third-party-game-launchers)
+- [dadwithadeck - How to install Non-Steam Game Launchers on Steam Deck with NonSteamLaunchers](https://dadwithadeck.com/2025/11/24/how-to-install-non-steam-game-launchers-on-steam-deck-with-nonsteamlaunchers/)
 
 <p align="center">
     ▶️ **YouTube Tutorial** 🡺🡺🡺 <a href="https://youtu.be/sxMmI8I9G_g">Watch here</a> 🡸🡸🡸 ▶️
@@ -96,19 +105,15 @@ Currently Working On 👷‍♂️
 
 **Windows Installation Steps**:
 
-1. **Sign in to GitHub** and go to this [link](https://github.com/SteamDeckHomebrew/decky-loader/actions/workflows/build-win.yml).
+1. Download the current Windows version of Decky Loader here [link](https://nightly.link/SteamDeckHomebrew/decky-loader/workflows/build-win/main/PluginLoader%20Win.zip)
 
-2. Choose the latest link or whichever version works for you.
+2. Download **NSLPluginWindows.exe** from [here](https://github.com/moraroy/NonSteamLaunchersDecky/releases).
 
-3. Scroll down to **"Artifacts"** and download **"PluginLoader Win"**. This is a zip file that you need to extract on your Windows machine. Make sure you're signed in to see the download link.
+3. Run **NSLPluginWindows.exe** first. This will also create the necessary cef debugging file for Decky Loader.
 
-4. Download **NSLPluginWindows.exe** from [here](https://github.com/moraroy/NonSteamLaunchersDecky/releases).
+4. Run either **No_console.exe** or **Plugin Loader.exe**, depending on your preference.
 
-5. Run **NSLPluginWindows.exe** first. This will also create the necessary cef debugging file for Decky Loader.
-
-6. Run either **No_console.exe** or **Plugin Loader.exe**, depending on your preference.
-
-7. Go into **Game Mode** or **Big Picture Mode** to see the Decky Loader plugin and NonSteamLaunchers.
+5. Go into **Game Mode** or **Big Picture Mode** to see the Decky Loader plugin and NonSteamLaunchers.
 
 
 This setup will automatically add all your non-Steam games with artwork, correctly formatted for Windows. Only scanning will work; nothing else will function, so you can either auto-scan or manually scan your games.
@@ -136,14 +141,17 @@ How to Run 🏃‍♂️
 + Select your launchers and hit OK. This will install your selected launchers. (Optionally, check "separate app ids", to install each launcher in its own prefix)
 + ❤️ = this will send and recieves any notes you have created to the community using the ```#nsl``` tag at the beginning of your note.
 + Uninstall = uninstalls the specific launchers and possibly its games too, each launcher uninstallation is different.
-+ 🔍 = Pressing the magnifying glass will stop the NSL Sanner and prompt you to restart it if needed. When you open NSL the scanner only runs once. So restarting it activates the real time service file for active scanning.
-+ Start Fresh = Wipes all of NSL, all the preixes, launchers, games, etc. Shortcuts will remain, and your game save backups, if any, at ```/home/deck/NSLGameSaves``` will not be deleted.
++ 🔍 = Pressing the magnifying glass will stop the NSL Scanner and prompt you to restart it if needed. When you open NSL the scanner will update from online then auto scan. So restarting it activates the real time service file for active scanning.
++ Start Fresh = Wipes all of NSL, all the prefixes, launchers, games, etc. Shortcuts will remain, and your game save backups, if any, at ```/home/deck/NSLGameSaves``` will not be deleted. This essentially "Uninstalls" NonSteamLaunchers.
 + Move to SD Card = moves each prefix to your SD Card, this is legacy code and probably still needs work.
 + Update Proton GE = this will update and install Proton GE and UMU if you dont have it already, the script attempts to do this on each launcher install but you can do it manually and help the script before hand if you want.
 + 🖥️ Off = this simply turns off your screen, useful if your doing long downloads to save battery.
-+ NSLGameSaves = this will inject your game saves from ```/home/eck/NSLGameSaves``` into its correct locations using ludusavi into your launchers. Use this if you pressed "Start Fresh" and have downloaded your launchers again, dont download your games until you have pressed this button.
++ NSLGameSaves = this will inject your game saves from ```/home/deck/NSLGameSaves``` into its correct locations using ludusavi into your launchers. Use this if you pressed "Start Fresh" and have downloaded your launchers again, dont download your games until you have pressed this button.
 + README = opens up this read me file.
 
+
+
+To stop the NSLGameScanner.service, open up NSL and hit "🔍" it will then ask you if you want to restart it, click no, and that's it.
 
 
 <h1 align="center">
@@ -162,11 +170,11 @@ The NSL script can be called from online via bash, heres an example of it instal
 
 - The "Move to SD Card" function can only be called in this format
   
-```/bin/bash -c 'curl -Ls https://raw.githubusercontent.com/moraroy/NonSteamLaunchers-On-Steam-Deck/main/NonSteamLaunchers.sh | nohup /bin/bash -s -- "Move to SD Card" "EpicGamesLauncher"```
+```/bin/bash -c 'curl -Ls https://raw.githubusercontent.com/moraroy/NonSteamLaunchers-On-Steam-Deck/main/NonSteamLaunchers.sh | nohup /bin/bash -s -- "Move to SD Card" "EpicGamesLauncher"'```
 
 - The format of "EpicGamesLauncher" comes from the user choosing to either "Separate App ID's" or use the default installation prefix "NonSteamLaunchers" in the compatdata folder. This would be named differently for each launcher. Otherwise the command line would then only be 
 
-```/bin/bash -c 'curl -Ls https://raw.githubusercontent.com/moraroy/NonSteamLaunchers-On-Steam-Deck/main/NonSteamLaunchers.sh | nohup /bin/bash -s -- "Move to SD Card" "NonSteamLaunchers"```
+```/bin/bash -c 'curl -Ls https://raw.githubusercontent.com/moraroy/NonSteamLaunchers-On-Steam-Deck/main/NonSteamLaunchers.sh | nohup /bin/bash -s -- "Move to SD Card" "NonSteamLaunchers"'```
 
 
 
@@ -184,7 +192,7 @@ Supported Stores 🛍
 - GOG Galaxy ✔️
 - Humble Games Collection ✔️
 - IndieGala ✔️
-- Itch.io ✔️
+- itch.io ✔️
 - Legacy Games ✔️
 - Rockstar Games Launcher ✔️
 - Ubisoft Connect ✔️
@@ -203,9 +211,13 @@ Supported Stores 🛍
 - VFUN Launcher ✔️
 - Tempo Launcher ✔️
 - Antstream Arcade ✔️
+- Hytale ✔️
+- Big Fish Games Manager ✔️
+- Gryphlink ✔️
 - RemotePlayWhatever ✔️
 - NVIDIA GeForce NOW (Native Linux) ✔️
 - STOVE Client ✔️
+- Moonlight Game Streaming ✔️
 
 <h1 align="center">
 Supported Streaming Sites for games and as well as any website. 🌐
@@ -240,6 +252,7 @@ Supported Streaming Sites for games and as well as any website. 🌐
 - Plex ✔️
 - Apple TV+ ✔️
 - Crunchyroll ✔️
+- Super Monkey Ball Online ✔️
 
 
 <h1 align="left">
@@ -259,9 +272,9 @@ Finds Games Automatically
 - HoYoPlay 🎮            💾 Full SD Card Support
 - Game Jolt Client 🎮    💾 Full SD Card Support
 - Minecraft Launcher 🎮
-- Waydroid Apps 🎮
+- Waydroid Apps 🎮       📜 Your own script Support
 - Humble Games Collection 🎮 💾 Full SD Card Support
-- NVIDIA GeForce NOW (Native) - You must "Favorite" the game
+- NVIDIA GeForce NOW (Native Linux App) - You must "Favorite" the game with the heart. Old favorites will not be picked up, you need to re-favorite.
 
 ## Chrome Bookmarks
 The scanner will pick these up automatically. But for Geforce Now only, change the name of the bookmark to your actual game name. Or you can press "Play" then Use "Ctrl + D". As long as the game name is in the Bookmark Name.
@@ -269,7 +282,8 @@ The scanner will pick these up automatically. But for Geforce Now only, change t
 - GeForce Now
 - Amazon Luna
 
-To stop the NSLGameScanner.service, open up NSL and hit "🔍" it will then ask you if you want to restart it, click no, and that's it.
+## Waydroid Detection
+If you're not in Official SteamOS or not using [this script](https://github.com/ryanrudolfoba/SteamOS-Waydroid-Installer) to install your Waydroid, you can put your own script for the App launch with the name "waydroid-cage.sh" in your own home directory and the scanner will do the rest. A good references for writing your own Script is in [here](https://github.com/SwallowKOR/cachyos-waydroid-gamemode).
 
 
 

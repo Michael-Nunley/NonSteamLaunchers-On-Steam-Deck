@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import os, re
+import os
+import re
 import json
 import shutil
 import binascii
@@ -14,19 +15,29 @@ import csv
 import configparser
 import certifi
 import itertools
-from datetime import datetime
-
-from urllib.request import urlopen
-from urllib.request import urlretrieve
-from urllib.parse import quote
-from base64 import b64encode
-import xml.etree.ElementTree as ET
-
+import shlex
+import ssl
 import socket
 import base64
-
-from urllib.parse import urlparse
 import http.client
+
+from datetime import datetime
+from base64 import b64encode
+
+import xml.etree.ElementTree as ET
+
+import urllib
+import urllib.request
+import urllib.error
+
+from urllib.request import urlopen, urlretrieve
+from urllib.parse import (
+    urlparse,
+    urlsplit,
+    urlunsplit,
+    quote
+)
+
 
 
 
@@ -40,13 +51,14 @@ if not dbus_address or not dbus_address.startswith('unix:path='):
 # Path to the env_vars file
 env_vars_path = f"{os.environ['HOME']}/.config/systemd/user/env_vars"
 env_vars_dir = os.path.dirname(env_vars_path)
+
 if not os.path.exists(env_vars_dir):
     os.makedirs(env_vars_dir)
 
 # Check if the env_vars file exists
 if not os.path.exists(env_vars_path):
     # If it doesn't exist, create it as an empty file
-    with open(env_vars_path, 'w') as f:
+    with open(env_vars_path, 'w'):
         pass
 
 print(f"Env vars file path is: {env_vars_path}")
@@ -55,16 +67,9 @@ print(f"Env vars file path is: {env_vars_path}")
 with open(env_vars_path, 'r') as f:
     lines = f.readlines()
 
-# Determine which lines to keep
-modified = False
 separate_appids = None
-lines_to_keep = []
-
-# Lines to remove
-remove_lines = {'chromelaunchoptions', 'websites_str'}
 
 for line in lines:
-    original_line = line  # Keep the original line for writing later
     if line.startswith('export '):
         line = line[7:]  # Remove 'export '
 
@@ -76,17 +81,6 @@ for line in lines:
         # Track separate_appids if explicitly set to false
         if name == 'separate_appids' and value.strip().lower() == 'false':
             separate_appids = value.strip()
-
-    # Only keep lines that do not contain the unwanted keys
-    if not any(remove_key in original_line for remove_key in remove_lines):
-        lines_to_keep.append(original_line)
-    else:
-        modified = True  # Mark as modified if a line is removed
-
-# If there were changes, write the cleaned-up lines back to the file
-if modified:
-    with open(env_vars_path, 'w') as f:
-        f.writelines(lines_to_keep)
 
 
 
@@ -113,6 +107,9 @@ minecraft_launcher = os.environ.get('minecraft_launcher', '')
 indie_launcher = os.environ.get('indie_launcher', '')
 stove_launcher = os.environ.get('stove_launcher', '')
 humble_launcher = os.environ.get('humble_launcher', '')
+gryphlink_launcher = os.environ.get('gryphlink_launcher', '')
+
+
 #Variables of the Launchers
 
 # Define the path of the Launchers
@@ -125,6 +122,8 @@ amazonshortcutdirectory = os.environ.get('amazonshortcutdirectory')
 itchioshortcutdirectory = os.environ.get('itchioshortcutdirectory')
 legacyshortcutdirectory = os.environ.get('legacyshortcutdirectory')
 humbleshortcutdirectory = os.environ.get('humbleshortcutdirectory')
+gryphlinkshortcutdirectory = os.environ.get('gryphlinkshortcutdirectory')
+
 indieshortcutdirectory = os.environ.get('indieshortcutdirectory')
 rockstarshortcutdirectory = os.environ.get('rockstarshortcutdirectory')
 glyphshortcutdirectory = os.environ.get('glyphshortcutdirectory')
@@ -143,17 +142,21 @@ temposhortcutdirectory = os.environ.get('temposhortcutdirectory')
 poketcgshortcutdirectory = os.environ.get('poketcgshortcutdirectory')
 antstreamshortcutdirectory = os.environ.get('antstreamshortcutdirectory')
 stoveshortcutdirectory = os.environ.get('stoveshortcutdirectory')
+bigfishshortcutdirectory = os.environ.get('bigfishshortcutdirectory')
+
 repaireaappshortcutdirectory = os.environ.get('repaireaappshortcutdirectory')
 #Streaming
 chromedirectory = os.environ.get('chromedirectory')
-websites_str = os.environ.get('custom_websites_str')
-custom_websites = websites_str.split(', ') if websites_str else []
+names_str = os.environ.get("custom_website_names_str", "")
+websites_str = os.environ.get("custom_websites_str", "")
+custom_names = [n.strip() for n in names_str.split(",") if n.strip()]
+custom_websites = [w.strip() for w in websites_str.split(",") if w.strip()]
+base_launch_options = os.environ.get("customchromelaunchoptions")
 
 
 
 
 
-# Fix sys.path insertion to avoid duplicates
 parent_folder = os.path.expanduser(f"{logged_in_home}/.config/systemd/user/Modules")
 
 if parent_folder not in sys.path:
@@ -162,9 +165,7 @@ if parent_folder not in sys.path:
 print(sys.path)
 
 # Now import your modules after the single insert
-import requests
 import vdf
-from steamgrid import SteamGridDB
 
 
 
@@ -180,7 +181,7 @@ Description=NSL Game Scanner
 [Service]
 ExecStart=/usr/bin/python3 '{logged_in_home}/.config/systemd/user/NSLGameScanner.py'
 Restart=always
-RestartSec=30
+RestartSec=20
 StartLimitBurst=40
 StartLimitInterval=240
 
@@ -207,11 +208,13 @@ if result.stdout.decode('utf-8').strip() != 'active':
     subprocess.run(['systemctl', '--user', 'enable', 'nslgamescanner.service'])
 
     # Start the service immediately
-    subprocess.run(['systemctl', '--user', 'start', 'nslgamescanner.service'])
+    #subprocess.run(['systemctl', '--user', 'start', 'nslgamescanner.service'])
 
     print("Service started.")
 else:
     print("Service is already running.")
+
+
 
 
 
@@ -301,6 +304,7 @@ def get_sgdb_art(game_id, app_id):
     print("Downloading grids artwork of size 920x430...")
     grid64 = download_artwork(game_id, "grids", app_id, "920x430")
 
+
 def download_artwork(game_id, art_type, shortcut_id, dimensions=None):
     if game_id is None:
         print("Invalid game ID. Skipping download.")
@@ -311,25 +315,23 @@ def download_artwork(game_id, art_type, shortcut_id, dimensions=None):
         filename = get_file_name(art_type, shortcut_id, dimensions)
     else:
         filename = get_file_name(art_type, shortcut_id)
+
+    # Define the full path where artwork should be stored
     file_path = f"{logged_in_home}/.steam/root/userdata/{steamid3}/config/grid/{filename}"
+    grid_folder_path = os.path.dirname(file_path)  # Get the parent directory (grid folder)
 
-    directory = os.path.dirname(file_path)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+    # Ensure the grid folder exists
+    if not os.path.exists(grid_folder_path):
+        os.makedirs(grid_folder_path, exist_ok=True)  # Create grid folder if it doesn't exist
+        print(f"Created grid folder at: {grid_folder_path}")
 
+    # Check if the file already exists
+    if file_exists_with_any_ext(file_path):
+        print(f"Artwork for {art_type} already exists. Skipping download.")
+        with open(file_path, 'rb') as image_file:
+            return b64encode(image_file.read()).decode('utf-8')
 
-
-
-
-    if os.path.exists(file_path):
-        if art_type == 'icons':
-            print(f"Icon artwork for {game_id} already exists. Skipping download.")
-            with open(file_path, 'rb') as image_file:
-                return b64encode(image_file.read()).decode('utf-8')
-        else:
-            print(f"{art_type} artwork already exists, but skipping file read. Will redownload for base64.")
-
-
+    # If the artwork is not found locally, proceed with the download process
     if cache_key in api_cache:
         data = api_cache[cache_key]
     else:
@@ -339,11 +341,13 @@ def download_artwork(game_id, art_type, shortcut_id, dimensions=None):
             if dimensions:
                 url += f"?dimensions={dimensions}"
             print(f"Request URL: {url}")
-            response = requests.get(url)
-            response.raise_for_status()
-            data = response.json()
+
+            with urllib.request.urlopen(url) as response:
+                if response.status != 200:
+                    raise Exception(f"Failed to fetch data, status code {response.status}")
+                data = json.load(response)
             api_cache[cache_key] = data
-        except Exception as e:
+        except (urllib.error.URLError, Exception) as e:
             print(f"Error making API call: {e}")
             api_cache[cache_key] = None
             return
@@ -352,6 +356,7 @@ def download_artwork(game_id, art_type, shortcut_id, dimensions=None):
         print(f"No data available for {game_id}. Skipping download.")
         return
 
+    # If no local file and no cache, start downloading artwork
     for artwork in data['data']:
         image_url = artwork['thumb']
         print(f"Downloading image from: {image_url}")
@@ -360,48 +365,57 @@ def download_artwork(game_id, art_type, shortcut_id, dimensions=None):
         for ext in ['png', 'ico']:
             try:
                 alt_file_path = file_path.replace('.png', f'.{ext}')
-                response = requests.get(image_url, stream=True)
-                response.raise_for_status()
+                # Use urllib to download the image
+                req = urllib.request.Request(image_url)
+                req.add_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+                req.add_header("Referer", "https://www.steamgriddb.com/")
 
-                if response.status_code == 200:
+                with urllib.request.urlopen(req) as response:
+                    if response.status == 200:
+                        image_data = response.read()
 
 
-
-                    if art_type == 'icons':
+                        # Save the image data to local file
                         with open(alt_file_path, 'wb') as file:
-                            file.write(response.content)
-                        print(f"Downloaded and saved icon to: {alt_file_path}")
-                    else:
-                        print(f"Downloaded {art_type} artwork as base64 (not saved to disk)")
-                    return b64encode(response.content).decode('utf-8')
+                            file.write(image_data)
+                        print(f"Downloaded and saved {art_type} to: {alt_file_path}")
 
-
-
-            except requests.exceptions.RequestException as e:
+                        # Return base64 encoded image data
+                        return b64encode(image_data).decode('utf-8')
+            except (urllib.error.URLError, Exception) as e:
                 print(f"Error downloading image in {ext}: {e}")
 
     print(f"Artwork download failed for {game_id}. Neither PNG nor ICO was available.")
     return None
 
+
+
 def get_game_id(game_name):
     print(f"Searching for game ID for: {game_name}")
     try:
-        encoded_game_name = quote(game_name)
+        encoded_game_name = urllib.parse.quote(game_name)
         url = f"{BASE_URL}/search/{encoded_game_name}"
         print(f"Encoded game name: {encoded_game_name}")
         print(f"Request URL: {url}")
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        if data['data']:
-            game_id = data['data'][0]['id']
-            print(f"Found game ID: {game_id}")
-            return game_id
-        print(f"No game ID found for game name: {game_name}")
+
+        # Open the URL and get the response
+        with urllib.request.urlopen(url) as response:
+            # Manually check if the status code is 200
+            if response.status == 200:
+                data = json.load(response)
+                if data.get('data'):
+                    game_id = data['data'][0]['id']
+                    print(f"Found game ID: {game_id}")
+                    return game_id
+                else:
+                    print(f"No game ID found for game name: {game_name}")
+            else:
+                print(f"Error: Unexpected status code {response.status}")
         return None
     except Exception as e:
         print(f"Error searching for game ID: {e}")
         return None
+
 
 def get_file_name(art_type, shortcut_id, dimensions=None):
     singular_art_type = art_type.rstrip('s')
@@ -432,73 +446,127 @@ def is_match(name1, name2):
 
 
 
-
 steam_applist_cache = None
+
 
 def get_steam_store_appid(steam_store_game_name):
     search_url = f"{BASE_URL}/search/{steam_store_game_name}"
     try:
-        response = requests.get(search_url)
-        response.raise_for_status()
-        data = response.json()
-        if 'data' in data and data['data']:
-            steam_store_appid = data['data'][0].get('steam_store_appid')
-            if steam_store_appid:
-                print(f"Found App ID for {steam_store_game_name} via primary source: {steam_store_appid}")
-                return steam_store_appid
-    except requests.exceptions.RequestException as e:
+        with urllib.request.urlopen(search_url) as response:
+            data = json.load(response)
+            if 'data' in data and data['data']:
+                steam_store_appid = data['data'][0].get('steam_store_appid')
+                if steam_store_appid:
+                    print(f"Found App ID for {steam_store_game_name} via primary source: {steam_store_appid}")
+                    return steam_store_appid
+    except (urllib.error.URLError, Exception) as e:
         print(f"Primary store App ID lookup failed for {steam_store_game_name}: {e}")
 
     # Fallback using Steam AppList (cached)
     global steam_applist_cache
     if steam_applist_cache is None:
+        steam_applist_cache = {}
+
+    def normalize_name(name):
+        name = name.lower()
+        name = re.sub(r'[®™]', '', name)
+        name = ' '.join(name.split())
+        return name
+
+    if steam_store_game_name not in steam_applist_cache:
+        time.sleep(0.5)  # Small delay to avoid spamming Steam
+        query = urllib.parse.quote(steam_store_game_name)
+        url = f"https://store.steampowered.com/api/storesearch/?term={query}&l=english&cc=US"
         try:
-            STEAM_BASE_URL = "https://api.steampowered.com"
-            app_list_url = f"{STEAM_BASE_URL}/ISteamApps/GetAppList/v2/"
-            response = requests.get(app_list_url)
-            response.raise_for_status()
-            steam_applist_cache = response.json()['applist']['apps']
-            print("Cached Steam app list from Steam API.")
-        except requests.exceptions.RequestException as e:
-            print(f"Steam AppList fallback failed for {steam_store_game_name}: {e}")
+            with urllib.request.urlopen(url, timeout=10) as response:
+                data = json.load(response)
+        except (urllib.error.URLError, Exception) as e:
+            print(f"Fallback Steam lookup failed for {steam_store_game_name}: {e}")
             return None
 
-    for app in steam_applist_cache:
-        if steam_store_game_name.lower() in app['name'].lower():
-            print(f"Found App ID for {steam_store_game_name} via cached Steam AppList: {app['appid']}")
-            return app['appid']
+        target = normalize_name(steam_store_game_name)
+        fallback_appid = None
+        for item in data.get("items", []):
+            if normalize_name(item.get("name", "")) == target:
+                fallback_appid = str(item.get("id"))
+                break
 
-    print(f"No App ID found for {steam_store_game_name} in cached Steam AppList.")
+        steam_applist_cache[steam_store_game_name] = fallback_appid
+
+    if steam_applist_cache[steam_store_game_name]:
+        print(f"Found App ID for {steam_store_game_name} via fallback Steam search API: {steam_applist_cache[steam_store_game_name]}")
+        return steam_applist_cache[steam_store_game_name]
+
+    print(f"No App ID found for {steam_store_game_name} in fallback Steam search API.")
     return None
+
 
 
 def create_steam_store_app_manifest_file(steam_store_appid, steam_store_game_name):
     steamapps_dir = f"{logged_in_home}/.steam/root/steamapps/"
     appmanifest_path = os.path.join(steamapps_dir, f"appmanifest_{steam_store_appid}.acf")
 
-    # Ensure the directory exists
     os.makedirs(steamapps_dir, exist_ok=True)
 
-    # Check if the file already exists
     if os.path.exists(appmanifest_path):
         print(f"Manifest file for {steam_store_appid} already exists.")
         return
 
-    # Prepare the appmanifest data
-    app_manifest_data = {
-        "AppState": {
-            "AppID": str(steam_store_appid),
-            "Universe": "1",
-            "installdir": steam_store_game_name,
-            "StateFlags": "0"
-        }
-    }
+    vdf_content = "\n".join([
+        '"AppState"',
+        "{",
+        f'\t"appid"\t\t"{steam_store_appid}"',
+        '\t"Universe"\t\t"1"',
+        f'\t"name"\t\t"{steam_store_game_name}"',
+        '\t"StateFlags"\t\t"0"',
+        f'\t"installdir"\t\t"{steam_store_game_name}"',
+        '\t"LastUpdated"\t\t""',
+        '\t"LastPlayed"\t\t""',
+        '\t"SizeOnDisk"\t\t""',
+        '\t"StagingSize"\t\t""',
+        '\t"buildid"\t\t""',
+        '\t"LastOwner"\t\t""',
+        '\t"DownloadType"\t\t""',
+        '\t"UpdateResult"\t\t""',
+        '\t"BytesToDownload"\t\t""',
+        '\t"BytesDownloaded"\t\t""',
+        '\t"BytesToStage"\t\t""',
+        '\t"BytesStaged"\t\t""',
+        '\t"TargetBuildID"\t\t""',
+        '\t"AutoUpdateBehavior"\t\t""',
+        '\t"AllowOtherDownloadsWhileRunning"\t\t""',
+        '\t"ScheduledAutoUpdate"\t\t""',
+        "",
+        '\t"InstalledDepots"',
+        "\t{",
+        "\t}",
+        "",
+        '\t"InstallScripts"',
+        "\t{",
+        "\t}",
+        "",
+        '\t"SharedDepots"',
+        "\t{",
+        "\t}",
+        "",
+        '\t"UserConfig"',
+        "\t{",
+        "\t}",
+        "",
+        '\t"MountedConfig"',
+        "\t{",
+        "\t}",
+        "}",
+        ""
+    ])
 
-    # Write the manifest to the file
-    with open(appmanifest_path, 'w') as file:
-        json.dump(app_manifest_data, file, indent=2)
+    try:
+        with open(appmanifest_path, 'w', encoding='utf-8') as file:
+            file.write(vdf_content)
+        print(f"Created appmanifest file at: {appmanifest_path}")
+    except Exception as e:
+        print(f"Failed to write manifest for '{steam_store_game_name}': {e}")
 
-    print(f"Created appmanifest file at: {appmanifest_path}")
 
 
 
@@ -522,13 +590,14 @@ def get_steam_fallback_url(steam_store_appid, art_type):
 
     for url in candidates:
         try:
-            response = requests.head(url, timeout=3)
-            if response.status_code == 200:
-                return url
-        except requests.RequestException as e:
+            with urllib.request.urlopen(url) as response:
+                if response.status == 200:
+                    return url
+        except (urllib.error.URLError, Exception) as e:
             print(f"Error checking fallback URL: {url} — {e}")
             continue
     return None
+
 
 
 def file_exists_with_any_ext(base_path):
@@ -547,11 +616,11 @@ def tag_artwork_files(shortcut_id, game_name, steamid3, logged_in_home):
     base_name = str(shortcut_id)
 
     patterns = [
-        f"{base_name}-icon",        
+        f"{base_name}-icon",
         f"{base_name}_logo",
         f"{base_name}_hero",
-        f"{base_name}p",            
-        f"{base_name}"               
+        f"{base_name}p",
+        f"{base_name}"
     ]
 
     found_files = []
@@ -781,6 +850,267 @@ def scan_and_track_games(logged_in_home, steamid3):
 
 
 
+
+
+#.desktop file logic
+def create_exec_line_from_entry(logged_in_home, new_entry, m_gameid):
+    try:
+        appname = new_entry.get('appname')
+        exe_path = new_entry.get('exe')  # full quoted command
+        launch_options = new_entry.get('LaunchOptions')
+        launcher_name = new_entry.get('Launcher')
+        compattool = new_entry.get('CompatTool')
+
+        print(f"Launch Options: {launch_options}")
+        print(f"App Name: {appname}")
+        print(f"Exe Path: {exe_path}")
+        print(f"Launcher Name: {launcher_name}")
+        print(f"Compat Tool: {compattool}")
+        print(f"m_gameid: {m_gameid}")
+
+        # Extract GOG/Epic/Origin/Amazon game_id
+        game_id = None
+
+        m = re.search(r'/gameId=(\d+)', launch_options)
+        if m:
+            game_id = m.group(1)
+            print(f"Found GOG gameId: {game_id}")
+
+            # Optional DOSBox / extra GOG args (quoted block after /path)
+            extra_gog_args = None
+            m = re.search(r'/path="[^"]+"\s+"([^"]+)"', launch_options)
+            if m:
+                extra_gog_args = m.group(1)
+                print(f"desktopC: GOG Extra Args: {extra_gog_args}")
+
+        if not game_id:
+            m = re.search(r'com\.epicgames\.launcher://apps/([^/?&]+)', launch_options)
+            if m:
+                game_id = m.group(1)
+                print(f"Found Epic gameId: {game_id}")
+
+        if not game_id:
+            m = re.search(r'amazon-games://play/([a-zA-Z0-9\-\.]+)', launch_options)
+            if m:
+                game_id = m.group(1)
+                print(f"Found Amazon gameId: {game_id}")
+
+        if not game_id:
+            m = re.search(r'origin2://game/launch\?offerIds=([a-zA-Z0-9\-]+)', launch_options)
+            if m:
+                game_id = m.group(1)
+                print(f"Found Origin gameId: {game_id}")
+
+        # Ubisoft Connect
+        if not game_id:
+            m = re.search(r'uplay://launch/(\d+)', launch_options)
+            if m:
+                game_id = m.group(1)
+                print(f"desktopC: Found Ubisoft gameId: {game_id}")
+
+
+
+        if not game_id:
+            print("No gameId found, skipping game ID-related steps.")
+        else:
+            print(f"Final game_id: {game_id}")
+
+        # UMU GAMEID
+        m = re.search(r'GAMEID="(\d+)"', launch_options)
+        umugameid = m.group(1) if m else None
+        print(f"UMU GameID: {umugameid}")
+
+        # STEAM_COMPAT_DATA_PATH prefix
+        compat_match = re.search(r'STEAM_COMPAT_DATA_PATH="([^"]+)"', launch_options)
+        if not compat_match:
+            print("ERROR: no STEAM_COMPAT_DATA_PATH")
+            return None
+        compat_data_prefix = os.path.basename(compat_match.group(1).rstrip("/"))
+        print(f"Compat prefix: {compat_data_prefix}")
+
+
+        dir_path = os.path.expanduser("~/.steam/root/compatibilitytools.d")
+        pattern = re.compile(r"UMU-Proton-(\d+(?:\.\d+)*)(?:-(\d+(?:\.\d+)*))?")
+
+        try:
+            umu_folders = [
+                (tuple(map(int, (m.group(1) + '.' + (m.group(2) or '0')).split('.'))), name)
+                for name in os.listdir(dir_path)
+                if (m := pattern.match(name)) and os.path.isdir(os.path.join(dir_path, name))
+            ]
+            if umu_folders:
+                compat_tool_name = max(umu_folders)[1]  # Most recent version
+                print(f"Found UMU Proton: {compat_tool_name}")
+            else:
+                print("No valid UMU Proton compatibility tool folders found.")
+                compat_tool_name = None
+        except Exception as e:
+            print(f"Error reading UMU Proton folders: {e}")
+            compat_tool_name = None
+
+        if compat_tool_name:
+            proton_path = os.path.join(logged_in_home, f".local/share/Steam/compatibilitytools.d/{compat_tool_name}")
+        else:
+            proton_path = f"{logged_in_home}/.local/share/Steam/compatibilitytools.d/{compattool}"
+
+        print(f"Final Proton Path: {proton_path}")
+
+        desktop_dir = os.path.join(logged_in_home, "Desktop")
+        if not os.path.isdir(desktop_dir):
+            print("Desktop not found")
+            return None
+
+        for filename in os.listdir(desktop_dir):
+            if not filename.endswith(".desktop"):
+                continue
+
+            path = os.path.join(desktop_dir, filename)
+
+            try:
+                content = open(path).read()
+            except:
+                continue
+
+            if f"steam://rungameid/{m_gameid}" not in content:
+                continue
+
+            print(f"Found .desktop: {path}")
+
+            UMU = f"{logged_in_home}/bin/umu-run"
+
+            tokens = shlex.split(exe_path)
+            first = os.path.basename(tokens[0])
+
+            if first == "umu-run":
+                final_exe_path = exe_path
+            else:
+                # Prefix umu-run without quotes
+                final_exe_path = f'{UMU} {exe_path}'
+
+            # Remove quotes around umu-run only
+            final_exe_path = re.sub(r'^"(/.*?umu-run)"', r'\1', final_exe_path)
+            print(f"Final Exe Path: {final_exe_path}")
+
+            env_vars = (
+                f'STEAM_COMPAT_DATA_PATH="{logged_in_home}/.local/share/Steam/steamapps/compatdata/{compat_data_prefix}/" '
+                f'WINEPREFIX="{logged_in_home}/.local/share/Steam/steamapps/compatdata/{compat_data_prefix}/pfx"'
+            )
+
+            if umugameid:
+                env_vars += f' GAMEID={umugameid}'
+                proton_path = f"{logged_in_home}/.local/share/Steam/compatibilitytools.d/{compat_tool_name}"
+            else:
+                proton_path = f"{logged_in_home}/.local/share/Steam/compatibilitytools.d/{compattool}"
+
+            env_vars += f' PROTONPATH="{proton_path}"'
+            print(f"Env Vars: {env_vars}")
+
+            # Build runner command (GOG, UMU, Epic, Origin, Amazon)
+
+            # Extract the path directly from the launch_options for gog only
+            m = re.search(r'/path="([^"]+)"', launch_options)
+            if m:
+                gog_game_path = m.group(1)
+                print(f"Extracted GOG Game Path: {gog_game_path}")
+            else:
+                gog_game_path = None
+                print("ERROR: No game path found in launch_options")
+
+            if "com.epicgames.launcher://" in launch_options:
+                runner_cmd = f'{final_exe_path} -com.epicgames.launcher://apps/{game_id}?action=launch&silent=true'
+            elif "origin2://" in launch_options:
+                runner_cmd = f'{final_exe_path} origin2://game/launch?offerIds={game_id}'
+            elif "amazon-games://" in launch_options:
+                runner_cmd = f'{final_exe_path} -amazon-games://play/{game_id}'
+            elif "uplay://" in launch_options and game_id:
+                runner_cmd = f'{final_exe_path} uplay://launch/{game_id}/0'
+
+            elif gog_game_path:
+                runner_cmd = (
+                    f'{final_exe_path} '
+                    f'/command=runGame /gameId={game_id} '
+                    f'/path="{gog_game_path}"'
+                )
+                if extra_gog_args:
+                    runner_cmd += f' "{extra_gog_args}"'
+
+            else:
+                runner_cmd = f'{final_exe_path}'
+
+            print(f"Runner Cmd: {runner_cmd}")
+
+            exec_line = (
+                f"Exec=sh -c '"
+                f"if command -v kdialog >/dev/null; then "
+                f"CHOICE=$(kdialog --yesno \"Standalone or with Steam?\" "
+                f"--yes-label \"UMU + {launcher_name}\" --no-label \"Steam\"); "
+                f"exit_code=$?; "
+                f"if [ $exit_code -eq 2 ]; then exit 0; fi; "
+                f"if [ $exit_code -eq 0 ]; then "
+                f"CHOICE={launcher_name.lower()}; "
+                f"elif [ $exit_code -eq 1 ]; then "
+                f"CHOICE=steam; "
+                f"fi; "
+                f"else CHOICE=steam; fi; "
+                f"if [ \"$CHOICE\" = \"steam\" ]; then steam steam://rungameid/{m_gameid}; "
+                f"else \"pkill -9 -f wineserver\"; {env_vars} {runner_cmd}; fi'"
+            )
+
+
+
+            print("Updated Exec line:")
+            print(exec_line)
+
+
+            content = content.replace(f"Exec=steam steam://rungameid/{m_gameid}", exec_line)
+
+            # Update the comment line
+            content = content.replace("Comment=Play this game on Steam", "Comment=Play this game on Steam or Standalone")
+
+
+
+            applications_dir = os.path.join(logged_in_home, ".local/share/applications/")
+            if not os.path.exists(applications_dir):
+                os.makedirs(applications_dir)
+
+
+            # Delete broken or Desktop-pointing symlinks in applications folder
+            # Delete broken symlinks in applications folder
+            for f in os.listdir(applications_dir):
+                full_path = os.path.join(applications_dir, f)
+                if f.endswith(".desktop") and os.path.islink(full_path):
+                    target = os.readlink(full_path)
+                    # Resolve relative symlinks
+                    real_target = os.path.join(os.path.dirname(full_path), target)
+                    if not os.path.exists(real_target):
+                        print(f"Deleting broken symlink in applications folder: {full_path} -> {target}")
+                        os.remove(full_path)
+
+
+            app_file_path = os.path.join(applications_dir, filename)
+
+            with open(app_file_path, "w") as file:
+                file.write(content)
+            print(f"Moved and updated .desktop file in {app_file_path}")
+
+            original_desktop_path = os.path.join(desktop_dir, filename)
+            if os.path.exists(original_desktop_path):
+                os.remove(original_desktop_path)
+
+            os.symlink(app_file_path, original_desktop_path)
+            print(f"Created symlink {original_desktop_path} -> {app_file_path}")
+
+
+        print("No matching .desktop file")
+        return None
+
+    except Exception as e:
+        print(f"Error creating Exec line: {e}")
+        return None
+#End of .desktop file logic
+
+
+
 def check_if_shortcut_exists(display_name, exe_path, start_dir, launch_options):
     stripped_exe_path = exe_path.strip('\"') if exe_path else exe_path
     stripped_start_dir = start_dir.strip('\"') if start_dir else start_dir
@@ -822,6 +1152,9 @@ track_game, finalize_tracking = scan_and_track_games(logged_in_home, steamid3)
 WS_HOST = "localhost"
 WS_PORT = 8080
 TARGET_TITLE = "SharedJSContext"
+TARGET_TITLE2 = "Steam"
+TARGET_TITLE3 = "Steam Big Picture Mode"
+
 
 
 JS_CODE = """
@@ -899,8 +1232,9 @@ window.createShortcut = async function(data) {
 
     // --- Set 'Sort As' title ---
     if (data.Launcher && typeof data.Launcher === "string" && data.Launcher.trim()) {
-      await SteamClient.Apps.SetShortcutSortAs(shortcutId, data.Launcher.trim());
-      console.log("Sort As title set to:", data.Launcher.trim());
+    const sortName = `${data.appname} ${data.Launcher.trim()}`;
+    await SteamClient.Apps.SetShortcutSortAs(shortcutId, sortName);
+    console.log("Sort As title set to:", sortName);
     }
 
     // --- Set Compatibility Tool ---
@@ -970,6 +1304,29 @@ window.createShortcut = async function(data) {
       }
     }
 
+    if (data.appname !== "NonSteamLaunchers") {
+      await SteamClient.Apps.CreateDesktopShortcutForApp(shortcutId);
+      console.log("Desktop shortcut created for shortcut:", shortcutId);
+    } else {
+      const collectionStoreRef = window.g_CollectionStore || window.collectionStore;
+      if (collectionStoreRef) {
+        collectionStoreRef.SetAppsAsHidden([shortcutId], true);
+        console.log("Shortcut 'NonSteamLaunchers' has been hidden instead of creating desktop shortcut.");
+      } else {
+        console.warn("Collection store not available. Cannot hide 'NonSteamLaunchers'.");
+      }
+    }
+
+    const appDetails = appStore.m_mapApps.get(shortcutId);
+    let m_gameid = null;
+
+    if (appDetails) {
+      m_gameid = appDetails.m_gameid;
+      console.log("Found m_gameid:", m_gameid);
+    } else {
+      console.warn("No app details found in appStore for shortcutId:", shortcutId);
+    }
+
     // --- Notification ---
     try {
       await sleep(300);
@@ -980,7 +1337,8 @@ window.createShortcut = async function(data) {
 
       const notificationPayload = {
         rawbody: data.appname + " was added to your library!",
-        state: "ingame"
+        state: "ingame",
+        steamid: "",
       };
 
       if (window.SteamClient && SteamClient.ClientNotifications) {
@@ -994,7 +1352,11 @@ window.createShortcut = async function(data) {
       console.warn("Failed to send notification:", notifyErr);
     }
 
-    return { success: true, shortcutId };
+    if (m_gameid !== null) {
+      return { success: true, shortcutId, m_gameid };
+    }
+
+    return { success: false, message: "App details not found in appStore." };
 
   } catch (e) {
     console.error("Failed to create shortcut:", e);
@@ -1012,6 +1374,461 @@ window.createShortcut = async function(data) {
   }
 };
 """
+
+
+
+PLAYTIME_CODE = """
+if (window.__REAL_PLAYTIME_LOADED__) {
+} else {
+    window.__REAL_PLAYTIME_LOADED__ = true;
+    const STORAGE_KEY = "realPlaytimeData";
+
+    let memoryCache = null;
+    const appliedSessions = {};
+
+    function isValidPlaytimeDataEntry(entry) {
+        return (
+            typeof entry === "object" &&
+            entry !== null &&
+            typeof entry.total === "number" &&
+            typeof entry.lastSessionEnd === "number"
+        );
+    }
+
+    function sanitizePlaytimeData(data) {
+        if (typeof data !== "object" || data === null) return {};
+        const cleaned = {};
+        for (const key in data) {
+            if (isValidPlaytimeDataEntry(data[key])) {
+                cleaned[key] = data[key];
+            }
+        }
+        return cleaned;
+    }
+
+    function loadPlaytimeData() {
+        try {
+            if (memoryCache) return memoryCache;
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) {
+                memoryCache = {};
+                return memoryCache;
+            }
+            const parsed = JSON.parse(raw);
+            const cleaned = sanitizePlaytimeData(parsed);
+            if (Object.keys(cleaned).length !== Object.keys(parsed || {}).length) {
+                savePlaytimeData(cleaned);
+            }
+            memoryCache = cleaned;
+            return memoryCache;
+        } catch {
+            memoryCache = {};
+            return memoryCache;
+        }
+    }
+
+    function savePlaytimeData(data) {
+        try {
+            const latestFromStorage = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+            const merged = { ...latestFromStorage, ...data };
+            memoryCache = merged;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        } catch {
+            memoryCache = data;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+    }
+
+    function isEnvironmentReady() {
+        try {
+            localStorage.setItem("__rp_test__", "1");
+            localStorage.removeItem("__rp_test__");
+            if (!window.appStore || typeof window.appStore.GetAppOverviewByAppID !== "function") return false;
+            if (!window.appInfoStore) return false;
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    function restoreSavedPlaytimes() {
+        const data = loadPlaytimeData();
+        if (!window.appStore?.GetAppOverviewByAppID) return;
+
+        let removedCount = 0;
+        for (const id in data) {
+            const entry = data[id];
+            const ov = appStore.GetAppOverviewByAppID(Number(id));
+            if (ov) {
+                ov.minutes_playtime_forever = Math.max(ov.minutes_playtime_forever || 0, entry.total);
+                ov.minutes_playtime_last_two_weeks = Math.max(ov.minutes_playtime_last_two_weeks || 0, entry.total);
+                ov.nPlaytimeForever = Math.max(ov.nPlaytimeForever || 0, entry.total);
+                ov.TriggerChange?.();
+            } else {
+                delete data[id];
+                removedCount++;
+            }
+        }
+        if (removedCount > 0) savePlaytimeData(data);
+    }
+
+    function applyRealSessionToOverview(appOverview) {
+        try {
+            if (!appOverview || appOverview.app_type !== 1073741824) return false;
+
+            const start = appOverview.rt_last_time_played;
+            const end = appOverview.rt_last_time_locally_played;
+            if (!start || !end || end <= start) return false;
+
+            const appId = String(appOverview.appid || (typeof appOverview.appid === "function" ? appOverview.appid() : appOverview.appId));
+            const sessionSeconds = end - start;
+            const sessionMinutes = Math.floor(sessionSeconds / 60);
+            if (sessionMinutes <= 0) return false;
+
+            const data = loadPlaytimeData();
+            const prevEntry = data[appId] || { total: 0, lastSessionEnd: 0 };
+
+            const effectiveEnd = Math.max(prevEntry.lastSessionEnd, end);
+            const addedMinutes = effectiveEnd > prevEntry.lastSessionEnd ? sessionMinutes : 0;
+            const newTotal = prevEntry.total + addedMinutes;
+            if (newTotal === prevEntry.total) return false;
+
+            data[appId] = { total: newTotal, lastSessionEnd: effectiveEnd };
+            savePlaytimeData(data);
+            appliedSessions[appId] = effectiveEnd;
+
+            appOverview.minutes_playtime_forever = newTotal;
+            appOverview.minutes_playtime_last_two_weeks = newTotal;
+            appOverview.nPlaytimeForever = newTotal;
+            appOverview.TriggerChange?.();
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    function patchAppStore() {
+        if (!window.appStore?.m_mapApps) return;
+        if (appStore.m_mapApps._originalSet) return;
+
+        appStore.m_mapApps._originalSet = appStore.m_mapApps.set;
+        appStore.m_mapApps.set = function(appId, appOverview) {
+            const result = appStore.m_mapApps._originalSet.call(this, appId, appOverview);
+            restoreSavedPlaytimes();
+            applyRealSessionToOverview(appOverview);
+            return result;
+        };
+    }
+
+    function patchAppInfoStore() {
+        if (!window.appInfoStore) return;
+        if (appInfoStore._originalOnAppOverviewChange) return;
+
+        appInfoStore._originalOnAppOverviewChange = appInfoStore.OnAppOverviewChange;
+        appInfoStore.OnAppOverviewChange = function(apps) {
+            for (const a of apps || []) {
+                const id = typeof a?.appid === "function" ? a.appid() : a?.appid;
+                const overview = id && appStore?.GetAppOverviewByAppID ? appStore.GetAppOverviewByAppID(Number(id)) : a;
+                if (overview) {
+                    restoreSavedPlaytimes();
+                    applyRealSessionToOverview(overview);
+                }
+            }
+            return appInfoStore._originalOnAppOverviewChange.call(this, apps);
+        };
+    }
+
+    function manualPatch() {
+        try {
+            const m = location.pathname.match(/\\/library\\/app\\/(\\d+)/);
+            if (m) {
+                const id = Number(m[1]);
+                const ov = appStore.GetAppOverviewByAppID(id);
+                if (ov) {
+                    restoreSavedPlaytimes();
+                    applyRealSessionToOverview(ov);
+                    appInfoStore?.OnAppOverviewChange?.([ov]);
+                }
+            }
+        } catch {}
+    }
+
+    (function initRealPlaytime(retryCount = 0) {
+        if (!isEnvironmentReady()) {
+            if (retryCount < 100) {
+                setTimeout(() => initRealPlaytime(retryCount + 1), 1000);
+            }
+            return;
+        }
+        try {
+            setTimeout(() => {
+                restoreSavedPlaytimes();
+                patchAppStore();
+                patchAppInfoStore();
+                manualPatch();
+            }, 100);
+        } catch {}
+    })();
+}
+"""
+
+
+
+THEMEMUSIC_CODE = r"""(function () {
+    const LOCAL_STORAGE_KEY = "ThemeMusicData";
+
+    const themeMusicEvents = new EventTarget();
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+
+    let ytAudioIframe = null;
+    let ytPlayer = null;
+    let ytPlayerReady = false;
+    let currentQuery = null;
+    let lastUrl = null;
+    let lastAppID = null;
+    let stoppingMusic = false;
+    let pausedForGame = false;
+    const sessionCache = new Map();
+
+    localStorage.setItem = function (key, value) {
+        originalSetItem(key, value);
+        if (key === LOCAL_STORAGE_KEY) {
+            const enabled = getThemeMusicEnabled(value);
+            themeMusicEvents.dispatchEvent(new CustomEvent("themeMusicToggle", { detail: { enabled } }));
+        }
+    };
+
+    window.addEventListener("storage", (e) => {
+        if (e.key === LOCAL_STORAGE_KEY) {
+            const enabled = getThemeMusicEnabled(e.newValue);
+            if (!enabled && ytPlayer) fadeOutAndStop();
+        }
+    });
+
+    themeMusicEvents.addEventListener("themeMusicToggle", (e) => {
+        if (!e.detail.enabled && ytPlayer) fadeOutAndStop();
+    });
+
+    function getThemeMusicEnabled(value = null) {
+        try {
+            const data = JSON.parse(value || localStorage.getItem(LOCAL_STORAGE_KEY) || "{}");
+            return !(data.themeMusic === false || data.themeMusic === "off");
+        } catch { return false; }
+    }
+
+    function loadCache() {
+        try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "{}"); }
+        catch { return {}; }
+    }
+
+    function saveCache(data) { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data)); }
+
+    function getCachedVideo(query) {
+        if (sessionCache.has(query)) {
+            const sessionEntry = sessionCache.get(query);
+            const cache = loadCache();
+            const localEntry = cache[query];
+            if (localEntry && localEntry.timestamp > sessionEntry.timestamp) {
+                sessionCache.set(query, localEntry);
+                return localEntry.videoId;
+            }
+            return sessionEntry.videoId;
+        }
+        const entry = loadCache()[query];
+        if (!entry) return null;
+        sessionCache.set(query, entry);
+        return entry.videoId;
+    }
+
+    function storeCachedVideo(query, videoId) {
+        const cache = loadCache();
+        const entry = { videoId, timestamp: Date.now() };
+        cache[query] = entry;
+        saveCache(cache);
+        sessionCache.set(query, entry);
+    }
+
+    if (!window.__MY_THEMEMUSIC_SCRIPT_LOADED__) {
+        Object.defineProperty(window, "__MY_THEMEMUSIC_SCRIPT_LOADED__", { value: true });
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+    }
+
+    function waitForYouTubeAPI() {
+        if (window.YT && window.YT.Player) return Promise.resolve();
+        return new Promise(resolve => { window.onYouTubeIframeAPIReady = resolve; });
+    }
+
+    function createYTPlayer(videoId) {
+        if (!getThemeMusicEnabled()) return Promise.resolve();
+
+        return waitForYouTubeAPI().then(() => {
+            if (ytPlayer && ytPlayerReady) {
+                if (ytPlayer.getVideoData?.().video_id === videoId) { ytPlayer.playVideo?.(); return; }
+                return fadeOutAndStop({ clearCurrent: false }).then(() => createYTPlayer(videoId));
+            }
+
+            ytAudioIframe?.remove();
+            ytAudioIframe = document.createElement("div");
+            ytAudioIframe.id = "yt-audio-player";
+            Object.assign(ytAudioIframe.style, { width: "0", height: "0", position: "absolute", opacity: "0", pointerEvents: "none" });
+            document.body.appendChild(ytAudioIframe);
+
+            ytPlayerReady = false;
+            ytPlayer = new YT.Player("yt-audio-player", {
+                height: "0",
+                width: "0",
+                videoId,
+                playerVars: { autoplay: 1 },
+                events: {
+                    onReady: () => { ytPlayerReady = true; ytPlayer.setVolume?.(100); },
+                    onStateChange: (e) => { if (e.data === YT.PlayerState.ENDED) fadeOutAndStop(); },
+                    onError: fadeOutAndStop
+                }
+            });
+        });
+    }
+
+    function fadeOutAndStop({ clearCurrent = true, fadeDuration = 300 } = {}) {
+        return new Promise(resolve => {
+            if (!ytPlayer) return resolve();
+            pausedForGame = true;
+
+            const startVolume = ytPlayer.getVolume?.() ?? 100;
+            const startTime = performance.now();
+
+            function step(now) {
+                if (!ytPlayer) return cleanup();
+
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / fadeDuration, 1);
+                const newVolume = Math.round(startVolume * (1 - progress));
+
+                ytPlayer.setVolume?.(newVolume);
+
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    cleanup();
+                }
+            }
+
+            function cleanup() {
+                try { ytPlayer.stopVideo?.(); ytPlayer.destroy?.(); } catch {}
+                ytAudioIframe?.remove();
+                ytAudioIframe = null;
+                ytPlayer = null;
+                ytPlayerReady = false;
+                currentQuery = null;
+
+                if (clearCurrent) clearCurrentlyPlaying();
+                pausedForGame = false;
+                resolve();
+            }
+
+            requestAnimationFrame(step);
+        });
+    }
+
+    function updateCurrentlyPlaying(query, videoId) {
+        try {
+            const data = loadCache();
+            data.currentlyPlaying = { name: query, videoId: videoId || "loading", timestamp: Date.now() };
+            saveCache(data);
+            themeMusicEvents.dispatchEvent(new CustomEvent("currentlyPlayingUpdated", { detail: { name: query, videoId } }));
+        } catch (e) { console.error("Update currentlyPlaying error:", e); }
+    }
+
+    function clearCurrentlyPlaying() {
+        try {
+            const data = loadCache();
+            data.currentlyPlaying = null;
+            saveCache(data);
+        } catch (e) { console.error(e); }
+    }
+
+    function playYouTubeAudio(query) {
+        if (!getThemeMusicEnabled()) return;
+        if (query === currentQuery && ytPlayer && ytPlayerReady) return;
+
+        const prevQuery = currentQuery;
+        currentQuery = query;
+
+        updateCurrentlyPlaying(query, "loading");
+
+        const cachedId = getCachedVideo(query);
+        if (cachedId) {
+            updateCurrentlyPlaying(query, cachedId);
+            return createYTPlayer(cachedId);
+        }
+
+        return fadeOutAndStop({ clearCurrent: false }).then(() => {
+            return fetch("https://nonsteamlaunchers.onrender.com/api/x7a9/" + encodeURIComponent(query))
+                .then(res => res.json())
+                .then(data => {
+                    if (!data?.videoId) return;
+                    storeCachedVideo(query, data.videoId);
+                    updateCurrentlyPlaying(query, data.videoId);
+                    return createYTPlayer(data.videoId);
+                })
+                .catch(() => {
+                    console.error("Theme music fetch failed");
+                    updateCurrentlyPlaying(prevQuery, null);
+                });
+        });
+    }
+
+    let lastPlaying = null;
+    themeMusicEvents.addEventListener("currentlyPlayingUpdated", (e) => {
+        const key = e.detail.name + e.detail.videoId;
+        if (key !== lastPlaying) {
+            lastPlaying = key;
+            console.log("Currently Playing:", e.detail.name, e.detail.videoId);
+        }
+    });
+
+    function handleAppId(appId) {
+        if (!getThemeMusicEnabled() || pausedForGame) return;
+        const appInfo = window.appStore?.m_mapApps?.get(appId);
+        if (appInfo?.display_name) playYouTubeAudio(appInfo.display_name + " Theme Music");
+    }
+
+    function handleUrl(url) {
+        if (!getThemeMusicEnabled()) return;
+        const decoded = decodeURIComponent(url);
+        const match = decoded.match(/\/library\/app\/(\d+)/) || window.location.pathname.match(/\/routes?\/library\/app\/(\d+)/);
+        if (!match) return;
+        const appId = Number(match[1]);
+        if (appId === lastAppID) return;
+        lastAppID = appId;
+        handleAppId(appId);
+    }
+
+    const mgr = window.MainWindowBrowserManager;
+    if (!mgr) return;
+    lastUrl = mgr.m_URL;
+    handleUrl(lastUrl);
+
+    function watchUrl() {
+        const current = mgr.m_URL;
+        if (current && current !== lastUrl) { lastUrl = current; handleUrl(current); }
+        requestAnimationFrame(watchUrl);
+    }
+    requestAnimationFrame(watchUrl);
+
+    if (window.SteamClient?.Apps?.RegisterForGameActionStart) {
+        SteamClient.Apps.RegisterForGameActionStart((appID) => {
+            if (stoppingMusic) return;
+            stoppingMusic = true;
+            console.log("Play clicked! Game starting… AppID:", appID);
+            fadeOutAndStop().finally(() => { stoppingMusic = false; });
+            mgr.LoadURL("/library");
+        });
+    }
+})();"""
+
 
 
 
@@ -1138,6 +1955,10 @@ def recv_ws_message(sock):
 
     return payload.decode('utf-8')
 
+
+
+
+
 # Inject JS code and call createShortcut(data) directly
 def recv_ws_message_for_id(sock, expected_id):
     while True:
@@ -1153,7 +1974,7 @@ def recv_ws_message_for_id(sock, expected_id):
             continue
 
 
-
+###Shortcut Creation ONLY
 eval_id_counter = itertools.count(1000)
 def inject_and_create_shortcut(ws_socket, shortcut_data):
     try:
@@ -1227,80 +2048,82 @@ def inject_and_create_shortcut(ws_socket, shortcut_data):
     except Exception as e:
         print(f"Exception during shortcut injection or creation: {e}")
         return None
-
-
+###END of Shortcut creation
 
 
 
 
 ###For Uninstall Notifications only
-def send_steam_notification(ws_socket, message_text):
+def send_launcher_notification(ws_socket, message_text, removed_apps):
     notify_id = next(eval_id_counter)
+    launcher_list = list(removed_apps.keys())
+    js_launchers = json.dumps(launcher_list)
+    js_message = json.dumps(message_text)
 
-    js_notify = f"""
+    JS_notify = f"""
     (function() {{
-        // Ensure shared audio context exists
-        if (!window._sharedAudioCtx) {{
-            window._sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }}
-        const ctx = window._sharedAudioCtx;
+        try {{
+            if (!window._sharedAudioCtx)
+                window._sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const ctx = window._sharedAudioCtx;
 
-        function playTone({{ type = 'sine', frequency = 440, frequencyEnd = null, volume = 0.1, duration = 1, startTime = null }}) {{
-            const now = ctx.currentTime;
-            const start = startTime ?? now;
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-
-            osc.type = type;
-            osc.frequency.setValueAtTime(frequency, start);
-
-            if (frequencyEnd !== null) {{
-                osc.frequency.exponentialRampToValueAtTime(frequencyEnd, start + duration);
+            function playTone({{ type='sine', frequency=440, frequencyEnd=null, volume=0.1, duration=1, startTime=null }}) {{
+                const now = ctx.currentTime;
+                const start = startTime ?? now;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(frequency, start);
+                if (frequencyEnd !== null)
+                    osc.frequency.exponentialRampToValueAtTime(frequencyEnd, start + duration);
+                gain.gain.setValueAtTime(volume, start);
+                gain.gain.exponentialRampToValueAtTime(0.0005, start + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(start);
+                osc.stop(start + duration);
+                osc.onended = () => {{ osc.disconnect(); gain.disconnect(); }};
             }}
 
-            gain.gain.setValueAtTime(volume, start);
-            gain.gain.exponentialRampToValueAtTime(0.0005, start + duration);
+            playTone({{ type:'sine', frequency:660, frequencyEnd:520, volume:0.12, duration:1.5 }});
+            playTone({{ type:'sine', frequency:520, frequencyEnd:400, volume:0.08, duration:0.8, startTime: ctx.currentTime + 0.1 }});
 
-            osc.connect(gain);
-            gain.connect(ctx.destination);
+            if (window.SteamClient && SteamClient.ClientNotifications) {{
+                const payload = {{ rawbody: {js_message}, state: "ingame" }};
+                SteamClient.ClientNotifications.DisplayClientNotification(
+                    3,
+                    JSON.stringify(payload),
+                    function(arg) {{ console.log("Notification callback:", arg); }}
+                );
+            }}
 
-            osc.start(start);
-            osc.stop(start + duration);
+            setTimeout(() => {{
+                const launcherNames = {js_launchers};
+                Array.from(collectionStore.collectionsFromStorage.values())
+                    .forEach(c => {{
+                        if (launcherNames.includes(c.m_strName)) {{
+                            if ((c.visibleApps?.length || 0) === 0) {{
+                                collectionStore.DeleteCollection(c.m_strId);
+                                console.log(`Removed empty collection: ${{c.m_strName}}`);
+                            }} else {{
+                                console.log(`Collection not empty, skipped: ${{c.m_strName}} (Apps count: ${{c.visibleApps.length}})`);
+                            }}
+                        }}
+                    }});
+            }}, 5000);
 
-            osc.onended = () => {{
-                osc.disconnect();
-                gain.disconnect();
-            }};
+        }} catch (err) {{
+            console.error("Error in notification JS:", err);
         }}
-
-        // Play descending tones for uninstall notification (opposite of add)
-        playTone({{ type: 'sine', frequency: 660, frequencyEnd: 520, volume: 0.12, duration: 1.5 }});
-        playTone({{ type: 'sine', frequency: 520, frequencyEnd: 400, volume: 0.08, duration: 0.8, startTime: ctx.currentTime + 0.1 }});
-
-        // Show Steam notification
-        if (window.SteamClient && SteamClient.ClientNotifications) {{
-            const payload = {{
-                rawbody: {json.dumps(message_text)},
-                state: "ingame"
-            }};
-            const jsonStr = JSON.stringify(payload);
-            SteamClient.ClientNotifications.DisplayClientNotification(3, jsonStr, function(arg) {{
-                console.log("Notification callback", arg);
-            }});
-            return true;
-        }} else {{
-            console.warn("SteamClient.ClientNotifications not available");
-            return false;
-        }}
-    }})()
+    }})();
     """
 
     send_ws_text(ws_socket, json.dumps({
         "id": notify_id,
         "method": "Runtime.evaluate",
         "params": {
-            "expression": js_notify,
-            "awaitPromise": False,  # Do NOT await promise here
+            "expression": JS_notify,
+            "awaitPromise": False,
             "returnByValue": True
         }
     }))
@@ -1336,7 +2159,7 @@ def inject_js_only(ws_socket):
         if not already_injected:
             print("Re-injecting Steam JS...")
             inject_id = next(eval_id_counter)
-            wrapped_code = f"(async () => {{ {JS_CODE}; window.__injectedSteamMod = true; return 'Injected'; }})()"
+            wrapped_code = f"(async () => {{ {JS_notify}; window.__injectedSteamMod = true; return 'Injected Successfully'; }})()"
             send_ws_text(ws_socket, json.dumps({
                 "id": inject_id,
                 "method": "Runtime.evaluate",
@@ -1356,6 +2179,1095 @@ def inject_js_only(ws_socket):
 
 
 
+#Watch only
+ws_url = get_ws_url_by_title(WS_HOST, WS_PORT, TARGET_TITLE)
+
+ws_socket = create_websocket_connection(ws_url)
+
+eval_id_counter = itertools.count(1)
+enable_id = next(eval_id_counter)
+
+# Enable Runtime
+send_ws_text(ws_socket, json.dumps({
+    "id": enable_id,
+    "method": "Runtime.enable"
+}))
+recv_ws_message_for_id(ws_socket, enable_id)
+
+watch_code = r'''if (!window.__watcherInjected) {
+    window.__watcherInjected = true;
+
+    let gameRunning = false;
+    let currentAppId = null;
+
+    (function() {
+        const originalLog = console.log;
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+
+            try {
+                const line = args.join(' ');
+
+                if (line.includes("OnGameActionUserRequest") &&
+                    line.includes("LaunchApp CreatingProcess")) {
+
+                    const match = line.match(/OnGameActionUserRequest:\s*(\d+)/);
+                    if (match) {
+                        const appId = match[1];
+                        if (appId.length >= 18 && appId.length <= 20) {
+                            gameRunning = true;
+                            currentAppId = appId;
+                            console.log("[Watcher] Game launch detected:", currentAppId);
+                        }
+                    }
+                }
+
+                if (gameRunning &&
+                   (line.includes("Removing overlay browser window") ||
+                    line.includes("NetworkDiagnosticsStore - unregistering for detailed connection state updates"))) {
+
+                    gameRunning = false;
+
+                    if (currentAppId) {
+                        setTimeout(() => {
+                            try {
+                                SteamClient.Apps.TerminateApp(currentAppId, false);
+                                console.log("[Watcher] App terminated:", currentAppId);
+                                currentAppId = null;
+                            } catch (e) {
+                                console.error("[Watcher] Termination error:", e);
+                            }
+                        }, 10000);
+                    }
+                }
+            } catch (e) {
+                originalLog("[Watcher] Watcher error:", e);
+            }
+        };
+    })();
+}'''
+
+def inject_watcher_once(ws_socket, watch_code):
+    inject_id = next(eval_id_counter)
+    check_id = next(eval_id_counter)
+
+    # Check if watcher already injected
+    send_ws_text(ws_socket, json.dumps({
+        "id": check_id,
+        "method": "Runtime.evaluate",
+        "params": {
+            "expression": "window.__watcherInjected === true",
+            "returnByValue": True
+        }
+    }))
+    result = recv_ws_message_for_id(ws_socket, check_id)
+    if result.get("result", {}).get("result", {}).get("value") is True:
+        print("Watcher already running. No reinjection.")
+        return
+
+    # Inject watcher
+    send_ws_text(ws_socket, json.dumps({
+        "id": inject_id,
+        "method": "Runtime.evaluate",
+        "params": {
+            "expression": watch_code,
+        }
+    }))
+    recv_ws_message_for_id(ws_socket, inject_id)
+    print("Watcher injected and running.")
+inject_watcher_once(ws_socket, watch_code)
+###end of watch
+
+
+
+
+
+###PLAYTIME ONLY
+# Ensure eval_id_counter exists
+eval_id_counter = iter(range(1, 1000000))
+
+def inject_playtime_code(ws_socket):
+    try:
+        inject_id = next(eval_id_counter)
+
+        wrapped_code = f"(async () => {{ {PLAYTIME_CODE}; return 'Playtime injection done'; }})()"
+
+        send_ws_text(ws_socket, json.dumps({
+            "id": inject_id,
+            "method": "Runtime.evaluate",
+            "params": {
+                "expression": wrapped_code,
+                "awaitPromise": True
+            }
+        }))
+
+        response = recv_ws_message_for_id(ws_socket, inject_id)
+        print("Playtime injection response:", response)
+        return response
+    except Exception as e:
+        print("Error during Playtime injection:", e)
+        return None
+
+# Usage
+try:
+    ws_url = get_ws_url_by_title(WS_HOST, WS_PORT, TARGET_TITLE)
+    ws_socket = create_websocket_connection(ws_url)
+
+    send_ws_text(ws_socket, json.dumps({"id": 1, "method": "Runtime.enable"}))
+    recv_ws_message_for_id(ws_socket, 1)
+
+    inject_playtime_code(ws_socket)
+except Exception as e:
+    print("Failed to connect or inject Playtime code:", e)
+
+#END OF PLAYTIME
+
+
+
+
+
+###THEMEMUSIC ONLY
+# Usage
+eval_id_counter = iter(range(1, 1000000))  # Ensure counter exists
+
+def inject_thememusic_code(ws_socket):
+    try:
+        inject_id = next(eval_id_counter)
+
+        wrapped_code = f"(async () => {{ {THEMEMUSIC_CODE}; return 'ThemeMusic injection done'; }})()"
+
+        send_ws_text(ws_socket, json.dumps({
+            "id": inject_id,
+            "method": "Runtime.evaluate",
+            "params": {
+                "expression": wrapped_code,
+                "awaitPromise": True
+            }
+        }))
+
+        response = recv_ws_message_for_id(ws_socket, inject_id)
+        print("ThemeMusic injection response:", response)
+        return response
+    except Exception as e:
+        print("Error during ThemeMusic injection:", e)
+        return None
+
+# Usage
+try:
+    ws_url = get_ws_url_by_title(WS_HOST, WS_PORT, TARGET_TITLE)
+    ws_socket = create_websocket_connection(ws_url)
+
+    send_ws_text(ws_socket, json.dumps({"id": 1, "method": "Runtime.enable"}))
+    recv_ws_message_for_id(ws_socket, 1)
+
+    inject_thememusic_code(ws_socket)
+except Exception as e:
+    print("Failed to connect or inject ThemeMusic code:", e)
+
+#END OF THEMEMUSIC
+
+
+
+### METADATA ONLY
+METADATA_CODE = r"""
+(function () {
+    if (window.__MY_METADATA_SCRIPT_LOADED__) {
+        return;
+    } else {
+        window.__MY_METADATA_SCRIPT_LOADED__ = true;
+
+        // Cache object to store game details
+        const gameCache = {};
+
+
+        async function getSteamGameDetails(gameName) {
+            if (gameCache[gameName]) return gameCache[gameName];
+
+            try {
+                const searchRes = await fetch(`https://store.steampowered.com/search/?term=${encodeURIComponent(gameName)}`, {
+                    credentials: "omit"
+                });
+                const searchHtml = await searchRes.text();
+                const searchDoc = new DOMParser().parseFromString(searchHtml, "text/html");
+
+                const results = [...searchDoc.querySelectorAll("a.search_result_row")].map(r => ({
+                    appid: r.dataset.dsAppid,
+                    title: r.querySelector(".title")?.innerText.trim()
+                }));
+
+                if (!results.length) {
+                    return await getWikipediaGameDetails(gameName);
+                }
+
+                const normalize = str => str?.toLowerCase().replace(/[-()]/g, "").replace(/\s+/g, " ").trim();
+                const match = results.find(r => normalize(r.title) === normalize(gameName));
+
+                if (!match) {
+                    return await getWikipediaGameDetails(gameName);
+                }
+
+                const appid = match.appid;
+                const apiRes = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appid}`);
+                const apiData = await apiRes.json();
+                const info = apiData[appid].data;
+
+                if (info) {
+                    const platformsStr = info.platforms
+                        ? Object.entries(info.platforms)
+                            .filter(([k,v]) => v)
+                            .map(([k]) => k)
+                            .join(", ")
+                        : "Unknown";
+
+                    const gameData = {
+                        appid: appid,
+                        about_the_game: info.short_description || null,
+                        developer: info.developers?.join(", ") || "Unknown",
+                        publisher: info.publishers?.join(", ") || "Unknown",
+                        release_date: info.release_date?.date || null,
+                        genres: info.genres?.map(g => g.description).join(", ") || null,
+                        platforms: platformsStr,
+                        metacritic_score: info.metacritic?.score || null,
+                        metacritic_url: info.metacritic?.url || null,
+                        image_url: info.screenshots?.[0]?.path_full || null,
+
+                        discounted_price:
+                            info.price_overview?.discount_percent > 0
+                                ? info.price_overview.final_formatted
+                                : null,
+
+                        discount_percent:
+                            info.price_overview?.discount_percent > 0
+                                ? info.price_overview.discount_percent
+                                : null,
+                    };
+
+                    gameCache[gameName] = gameData;
+                    return gameData;
+                }
+
+                return await getWikipediaGameDetails(gameName);
+            } catch (err) {
+                return await getWikipediaGameDetails(gameName);
+            }
+        }
+
+        async function getWikipediaGameDetails(gameName) {
+            if (gameCache[gameName]) return gameCache[gameName];
+
+            try {
+                let gameTitle = gameName.replace(/\s+/g, "_");
+                let url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(gameTitle)}`;
+                let res = await fetch(url);
+
+                if (!res.ok) {
+                    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(gameName)}&format=json&origin=*`;
+                    const searchRes = await fetch(searchUrl);
+                    const searchData = await searchRes.json();
+                    if (!searchData.query.search.length) return null;
+
+                    gameTitle = searchData.query.search[0].title.replace(/\s+/g, "_");
+                    url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(gameTitle)}`;
+                    res = await fetch(url);
+                    if (!res.ok) return null;
+                }
+
+                const data = await res.json();
+                const sentences = data.extract?.match(/[^.!?]+[.!?]+/g) || [];
+                const description = sentences.slice(0, 2).join(" ").trim();
+                const displayTitle = data.displaytitle?.replace(/<[^>]+>/g, "").replace(/\//g, "").trim();
+
+                const game = {
+                    appid: null,
+                    displayTitle,
+                    about_the_game: description || data.extract || null,
+                    developer: "Unknown",
+                    publisher: "Unknown",
+                    release_date: null,
+                    genres: null,
+                    platforms: "Unknown",
+                    metacritic_score: null,
+                    metacritic_url: null,
+                    image_url: data.originalimage?.source || null
+                };
+
+                const wikidataId = data.wikibase_item;
+                if (wikidataId) {
+                    const wdRes = await fetch(`https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`);
+                    const wdData = await wdRes.json();
+                    const claims = wdData.entities[wikidataId].claims;
+
+                    const getClaimId = prop => claims?.[prop]?.[0]?.mainsnak?.datavalue?.value?.id || null;
+                    const getClaimTime = prop => claims?.[prop]?.[0]?.mainsnak?.datavalue?.value?.time || null;
+                    const getClaimIdList = prop => claims?.[prop]?.map(c => c.mainsnak.datavalue.value.id) || [];
+
+                    const developerId = getClaimId("P178");
+                    const publisherId = getClaimId("P123");
+                    const releaseTime = getClaimTime("P577");
+                    const genreIds = getClaimIdList("P136");
+                    const platformIds = getClaimIdList("P400");
+
+                    const idsToResolve = [developerId, publisherId, ...genreIds, ...platformIds].filter(Boolean);
+                    let labelsData = {};
+
+                    if (idsToResolve.length) {
+                        const labelsRes = await fetch(
+                            `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${idsToResolve.join("|")}&props=labels&languages=en&format=json&origin=*`
+                        );
+                        const labelsJson = await labelsRes.json();
+                        labelsData = labelsJson.entities || {};
+                    }
+
+                    game.developer = developerId ? labelsData[developerId]?.labels?.en?.value ?? "Unknown" : "Unknown";
+                    game.publisher = publisherId ? labelsData[publisherId]?.labels?.en?.value ?? "Unknown" : "Unknown";
+                    game.release_date = releaseTime ? releaseTime.match(/\d{4}/)[0] : null;
+
+                    if (genreIds.length) {
+                        const genreLabel = labelsData[genreIds[0]]?.labels?.en?.value ?? "Unknown";
+                        game.genres = genreLabel.replace(/\s*\(.*?\)\s*/g, "").trim();
+                    }
+
+                    const platformsClean = platformIds.map(id => {
+                        const label = labelsData[id]?.labels?.en?.value ?? "Unknown";
+                        return label.replace(/\s*\(.*?\)\s*/g, "").trim();
+                    });
+                    game.platforms = platformsClean.length
+                        ? platformsClean.join(", ")
+                        : "Unknown"; // <- Always string
+                }
+
+                gameCache[gameName] = game;
+                return game;
+
+            } catch (err) {
+                return null;
+            }
+        }
+
+        async function getGameDetails(gameName) {
+            let gameData = await getSteamGameDetails(gameName);
+            if (!gameData) gameData = await getWikipediaGameDetails(gameName);
+            return gameData;
+        }
+
+
+
+        function replaceText() {
+            document.querySelectorAll("div").forEach(div => {
+                if (
+                    div.childNodes.length === 1 &&
+                    div.firstChild.nodeType === Node.TEXT_NODE
+                ) {
+                    const originalText = div.firstChild.nodeValue;
+                    const match = originalText.match(/Some detailed information on (.*?) is unavailable/i);
+                    if (match) {
+                        const gameName = match[1];
+                        const key = gameName.toUpperCase();
+                        // Fetch game details from Steam (from cache or API)
+                        getSteamGameDetails(gameName).then(gameData => {
+                            if (!gameData) return;
+                            const descriptionText = gameData.about_the_game || "No description available.";
+                            const bgImage = gameData.image_url || "https://images-1.gog-statics.com/6f3d015c3029fea5221ccd9802de5e2f92c6afccc0196b15540677341936a656.jpg";
+                            div.textContent = '';
+
+                            //Check div
+                            const currentDiv = div;
+
+                            const nextDiv = currentDiv.nextElementSibling;
+
+                            if (nextDiv) {
+                                nextDiv.appendChild(currentDiv);
+                            }
+
+
+                // Main div styling
+                div.style.position = "relative";
+                div.style.overflow = "hidden";
+                div.style.height = "250px";
+                div.style.borderRadius = "6px";
+                div.style.fontFamily = '"Roboto", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+                div.style.color = "white";
+                div.style.outline = "none";
+                div.style.border = "none";
+
+                // Background image
+                const img = document.createElement('img');
+                img.src = bgImage;
+                img.alt = gameName;
+                img.style.width = "100%";
+                img.style.height = "100%";
+                img.style.objectFit = "cover";
+                img.style.position = "absolute";
+                img.style.top = 0;
+                img.style.left = 0;
+                img.style.opacity = 0.5;
+
+                // Overlay
+                const overlay = document.createElement('div');
+                overlay.style.position = "absolute";
+                overlay.style.top = 0;
+                overlay.style.left = 0;
+                overlay.style.width = "100%";
+                overlay.style.height = "100%";
+                overlay.style.padding = "10px";
+                overlay.style.display = "flex";
+                overlay.style.flexDirection = "column";
+                overlay.style.justifyContent = "flex-start";
+                overlay.style.background =
+                "linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.7))";
+
+                // Content row
+                const contentRow = document.createElement('div');
+                contentRow.style.display = "flex";
+                contentRow.style.flexDirection = "row";
+                contentRow.style.flex = "1 1 auto";
+
+                // Left column (launcher icon + tags)
+                const leftColumn = document.createElement('div');
+                leftColumn.style.display = "flex";
+                leftColumn.style.flexDirection = "column";
+                leftColumn.style.alignItems = "flex-start";
+                leftColumn.style.marginRight = "15px";
+                leftColumn.style.flexShrink = "0";
+
+
+                // Add these:
+                leftColumn.style.maxWidth = "250px"; // or a % like "35%" depending on your layout
+                leftColumn.style.overflow = "visible"; // ensures it doesn’t break layout
+
+                // Walk up fixed number of steps
+                const TARGET_STEP = 7;
+                let ancestor = div;
+                for (let i = 0; i < TARGET_STEP && ancestor.parentElement; i++) {
+                    ancestor = ancestor.parentElement;
+                }
+
+                // Scan children for a plausible launcher name
+                let foundLauncher = null;
+                for (const child of ancestor.querySelectorAll("div, span, button, a")) {
+                    let text = child.textContent?.trim();
+                    if (!text || text.length >= 50) continue;
+
+                    text = text.replace(/^Found in these collections/i, "").trim();
+                    text = text.replace(/\s*\(.*?\)/g, "").trim();
+
+                    if (text) {
+                        foundLauncher = text;
+                        break;
+                    }
+                }
+
+
+                // Launcher icons
+                const launcherIcons = {
+                "Epic Games": "https://cdn2.steamgriddb.com/icon/34ffeb359a192eb8174b6854643cc046/32/96x96.png",
+                "GOG Galaxy": "https://cdn2.steamgriddb.com/icon/a928731e103dfc64c0027fa84709689e/32/96x96.png",
+                "NonSteamLaunchers": "https://raw.githubusercontent.com/moraroy/NonSteamLaunchers-On-Steam-Deck/refs/heads/main/logo.png",
+                "Ubisoft Connect": "https://cdn2.steamgriddb.com/icon/dabcff9ba10224b01fd2ce83f7d73ad6/32/96x96.png",
+                "EA App": "https://cdn2.steamgriddb.com/icon/ff51fb7a9bcb22c595616b4fa368880a/32/96x96.png",
+                "Amazon Games": "https://cdn2.steamgriddb.com/icon_thumb/6e88ec1459f337d5bea6353f8bff8026.png",
+                "itch.io": "https://cdn2.steamgriddb.com/icon/2ad9e5e943e43cad612a7996c12a8796/32/96x96.png",
+                "Battle.net": "https://cdn2.steamgriddb.com/icon/739465804a0e17d2a47c9bc9c805d60a/32/96x96.png",
+                "Legacy Games": "https://cdn2.steamgriddb.com/icon_thumb/5225802cb9758f9fcd34a679bf9326ec.png",
+                "VK Play": "https://cdn2.steamgriddb.com/icon_thumb/5d35998237b55b8778a75732afc080aa.png",
+                "HoyoPlay": "https://cdn2.steamgriddb.com/icon/817fccd834f01fb5e1770c8679c0824e/32/256x256.png",
+                "Game Jolt Client": "https://cdn2.steamgriddb.com/icon_thumb/17df67628bb89193838f83015a3e7d30.png",
+                "Minecraft Launcher": "https://cdn2.steamgriddb.com/icon/0678c572b0d5597d2d4a6b5bd135754c/32/96x96.png",
+                "Humble Games Collection": "https://cdn2.steamgriddb.com/icon_thumb/3126ed973cbecde2bbffe419f139f456.png",
+                "NVIDIA GeForce NOW": "https://cdn2.steamgriddb.com/icon_thumb/f91ee142269ec908c23e1cd87286e254.png",
+                "Waydroid": "https://cdn2.steamgriddb.com/icon_thumb/d6de4f0418bf4015017f5c65cdecc46e.png",
+                "Google Chrome": "https://cdn2.steamgriddb.com/icon/3941c4358616274ac2436eacf67fae05/32/256x256.png",
+                "Brave": "https://cdn2.steamgriddb.com/icon_thumb/192d80a88b27b3e4115e1a45a782fe1b.png",
+                "Vivaldi": "https://cdn2.steamgriddb.com/icon_thumb/51934729f32d36841a17e43e9390483a.png",
+                "Mozilla Firefox": "https://cdn2.steamgriddb.com/icon_thumb/fe998b49c41c4208c968bce204fa1cbb.png",
+                "LibreWolf": "https://cdn2.steamgriddb.com/icon/791608b685d1c61fb2fe8acdc69dc6b5/32/128x128.png",
+                "Microsoft Edge": "https://cdn2.steamgriddb.com/icon_thumb/714cb7478d98b1cb51d1f5f515f060c7.png",
+                "Gryphlink": "https://i.namu.wiki/i/1CZOhlpjxh3owDKXC9axrnMHtotdDaoFMmnzBvQ0yOqCDOL3rIZpH2DyLfX2UCRul9CxIH0gCn1DmRodHnKr6-IUmEzSZpZ6p4r9zRbDvwPe94gZnek0VaIvKfsWsx6L28czwaiz0Mj1NNayAkypNQ.webp",
+                "WebRcade": "https://cdn2.steamgriddb.com/icon_thumb/4916ba26c0ec4e43588dcc3e019ede51.png",
+                "Nintendo": "https://cdn2.steamgriddb.com/icon_thumb/17b6114b9a9b8d8602ec9d9dfeb6a15f.png",
+                "Super Nintendo": "https://cdn2.steamgriddb.com/icon_thumb/d4dcf709a96dca127d0429d73c443afb.png",
+                "Nintendo 64": "https://cdn2.steamgriddb.com/icon_thumb/328de839e30893a67fc55ee2bf2ff5ae.png",
+                "Nintendo GameCube": "https://cdn2.steamgriddb.com/icon/3caf2d9b17ad63105399b122e2061eb1/32/256x256.png",
+                "Nintendo Wii": "https://cdn2.steamgriddb.com/icon_thumb/4c220c393016798aed81f9350e68f61c.png",
+                "Nintendo Wii U": "https://cdn2.steamgriddb.com/icon_thumb/c6c02ef92aa0dcb6c333a27cfb22d47c.png",
+                "Nintendo Switch": "https://cdn2.steamgriddb.com/icon_thumb/3b05af2c48dbaf6656fdf2d2f905b3b6.png",
+                "PlayStation": "https://cdn2.steamgriddb.com/icon_thumb/f6a81f703854985705a0cc479d221282.png",
+                "PlayStation 2": "https://cdn2.steamgriddb.com/icon/5e3600417e9ac9abf5a6fea026f9b05a/32/256x256.png",
+                };
+
+                const aliasGroups = {
+                    "Super Nintendo": ["SNES", "Super NES", "SuperNintendo", "Super Nintendo Entertainment System"],
+                    "Nintendo 64": ["N64", "Nintendo64", "Nintendo 64"],
+                    "Epic Games": ["Epic Game Store", "Epic Store", "EGS"],
+                    "PlayStation": ["PS", "PS1", "Sony PlayStation", "PSX", "PS one", "PSOne", "playstation"],
+                    "Nintendo GameCube": ["GC", "NGC", "Gamecube", "GameCube", "NintendoGameCube"],
+                    "Nintendo Wii": ["Wii", "NintendoWii", "RVL"],
+                    "Nintendo Wii U": ["WiiU", "NintendoWiiU", "Wii U", "Cafe"],
+                    "Nintendo Switch": ["Switch", "NintendoSwitch", "NS", "NSW", "HAC"],
+                    // add more groups here
+                };
+
+
+                function normalizeLauncherName(name) {
+                return name.trim().toLowerCase();
+                }
+
+                const launcherAliases = {};
+
+                for (const [canonical, aliases] of Object.entries(aliasGroups)) {
+                for (const alias of aliases) {
+                    launcherAliases[normalizeLauncherName(alias)] = canonical;
+                }
+                launcherAliases[normalizeLauncherName(canonical)] = canonical;
+                }
+
+                function resolveLauncherName(name) {
+                return launcherAliases[normalizeLauncherName(name)] || name;
+                }
+
+                function getLauncherIcon(name) {
+                return launcherIcons[resolveLauncherName(name)];
+                }
+
+                const launcherName = foundLauncher;
+                const launcherIcon = launcherName ? getLauncherIcon(launcherName) : null;
+
+
+                if (launcherIcon) {
+                // Row that holds launcher icon + music button
+                const launcherRow = document.createElement('div');
+                launcherRow.style.display = "flex";
+                launcherRow.style.alignItems = "center";
+                launcherRow.style.gap = "8px";
+                launcherRow.style.marginBottom = "8px";
+
+                // Launcher icon
+                const icon = document.createElement('img');
+                icon.src = launcherIcon;
+                icon.alt = launcherName;
+                icon.style.width = "60px";
+                icon.style.height = "60px";
+                icon.style.objectFit = "contain";
+                icon.onerror = () => icon.remove();
+
+                launcherRow.appendChild(icon);
+
+                // Placeholder music button (no logic)
+                const musicBtn = document.createElement('button');
+                musicBtn.textContent = "🎵";
+                musicBtn.style.background = "rgba(36,40,47,0.7)";
+                musicBtn.style.color = "white";
+                musicBtn.style.border = "none";
+                musicBtn.style.borderRadius = "12px";
+                musicBtn.style.padding = "6px 10px";
+                musicBtn.style.fontSize = "14px";
+                musicBtn.style.lineHeight = "1";
+                musicBtn.style.cursor = "pointer";
+                musicBtn.style.display = "flex";
+                musicBtn.style.alignItems = "center";
+                musicBtn.style.justifyContent = "center";
+                musicBtn.style.transition = "background 0.2s ease";
+
+
+                launcherRow.appendChild(musicBtn);
+                attachThemeMusicBehavior(musicBtn);
+
+
+                // Add row to left column
+                leftColumn.appendChild(launcherRow);
+                }
+
+
+                function createTag(text, fontSize) {
+                const tag = document.createElement('span');
+                tag.textContent = text;
+                tag.style.fontSize = fontSize; // ← use the value passed in
+                tag.style.background = "rgba(36,40,47,0.7)";
+                tag.style.padding = "3px 8px";
+                tag.style.borderRadius = "12px";
+                tag.style.whiteSpace = "normal";
+                tag.style.display = "inline-block";
+                tag.style.wordBreak = "break-word";
+                tag.style.marginRight = "4px";
+                tag.style.marginBottom = "4px";
+                return tag;
+                }
+
+                function createTagRow(items) {
+                const row = document.createElement('div');
+                row.style.display = "flex";
+                row.style.flexWrap = "wrap";
+                row.style.gap = "4px";
+
+                // Determine font size based on number of items
+                const fontSize = items.length > 3 ? "7.8px" : "12px";
+
+                items.forEach(item => row.appendChild(createTag(item, fontSize)));
+                return row;
+                }
+
+
+                leftColumn.appendChild(createTagRow((gameData.platforms || "Unknown").split(",").map(p => p.trim())));
+                leftColumn.appendChild(createTagRow((gameData.developer || "Unknown").split(",").map(d => d.trim())));
+                leftColumn.appendChild(createTagRow((gameData.publisher || "Unknown").split(",").map(p => p.trim())));
+                leftColumn.appendChild(createTagRow([gameData.release_date || "Unknown"]));
+                leftColumn.appendChild(createTagRow((gameData.genres || "Unknown").split(",").map(g => g.trim())));
+
+                // Right column (description + Metacritic tab)
+                const rightColumn = document.createElement('div');
+                rightColumn.style.display = "flex";
+                rightColumn.style.flexDirection = "column";
+                rightColumn.style.flex = "1";
+
+                // Wrap description in a container for absolute tabs
+                const descriptionWrapper = document.createElement('div');
+                descriptionWrapper.style.position = "relative";
+                descriptionWrapper.style.width = "100%"; // ensures tab positions correctly
+
+                const description = document.createElement('p');
+                description.textContent = descriptionText;
+                description.style.fontSize = "14px";
+                description.style.lineHeight = "1.4";
+                description.style.background = "rgba(36,40,47,0.7)";
+                description.style.padding = "8px 12px";
+                description.style.borderRadius = "12px";
+                description.style.wordBreak = "break-word";
+                description.style.overflowWrap = "break-word";
+
+                descriptionWrapper.appendChild(description);
+
+                // --- Metacritic tab ---
+                if (gameData.metacritic_score && gameData.metacritic_url) {
+                    const metaTab = document.createElement('a');
+                    metaTab.href = gameData.metacritic_url;
+                    metaTab.target = "_blank";
+                    metaTab.style.position = "absolute";
+                    metaTab.style.top = "14px";
+                    metaTab.style.left = "-18px";
+                    metaTab.style.display = "flex";
+                    metaTab.style.flexDirection = "column";
+                    metaTab.style.alignItems = "center";
+                    metaTab.style.justifyContent = "center";
+                    metaTab.style.background = "rgba(36,40,47,0.85)";
+                    metaTab.style.color = "white";
+                    metaTab.style.fontSize = "12px";
+                    metaTab.style.padding = "4px 6px";
+                    metaTab.style.borderRadius = "8px";
+                    metaTab.style.textDecoration = "none";
+                    metaTab.style.cursor = "pointer";
+                    metaTab.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+                    metaTab.style.zIndex = "10";
+
+                    metaTab.onmouseover = () => metaTab.style.background = "rgba(80,80,80,0.9)";
+                    metaTab.onmouseout = () => metaTab.style.background = "rgba(36,40,47,0.85)";
+
+                    const metaLogo = document.createElement('img');
+                    metaLogo.src = "https://static.wikia.nocookie.net/logopedia/images/1/1f/Metacritic_2.svg";
+                    metaLogo.style.width = "16px";
+                    metaLogo.style.height = "16px";
+                    metaLogo.style.marginBottom = "2px";
+
+                    const scoreText = document.createElement('span');
+                    scoreText.textContent = gameData.metacritic_score;
+                    scoreText.style.fontWeight = "bold";
+                    scoreText.style.fontSize = "12px";
+
+
+                    // Set color based on Metacritic score using RGB
+                    const score = parseInt(gameData.metacritic_score, 10);
+
+                    if (score >= 0 && score <= 49) {
+                        // Dark faded pink (red-ish)
+                        scoreText.style.color = "rgb(139, 75, 90)"; // muted/dark pink
+                    } else if (score >= 50 && score <= 79) {
+                        // Dark faded orange
+                        scoreText.style.color = "rgb(166, 106, 58)"; // muted/dark orange
+                    } else if (score >= 80) {
+                        // Dark faded green
+                        scoreText.style.color = "rgb(75, 139, 90)"; // muted/dark green
+                    }
+
+                    metaTab.appendChild(metaLogo);
+                    metaTab.appendChild(scoreText);
+
+                    // Attach to wrapper (so it floats above description)
+                    descriptionWrapper.appendChild(metaTab);
+                }
+
+                rightColumn.appendChild(descriptionWrapper);
+                contentRow.appendChild(leftColumn);
+                contentRow.appendChild(rightColumn);
+                overlay.appendChild(contentRow);
+
+
+
+                // Bottom links
+                const bottomLinks = document.createElement('div');
+                bottomLinks.style.position = "absolute";
+                bottomLinks.style.bottom = "34px";
+                bottomLinks.style.left = "10px";
+                bottomLinks.style.right = "10px";
+                bottomLinks.style.display = "flex";
+                bottomLinks.style.flexWrap = "wrap";
+                bottomLinks.style.gap = "6px";
+
+                const searchSites = [
+                { name: "Google", url: "https://www.google.com/search?q=", icon: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg" },
+
+                { name: "PCGW", url: "https://www.pcgamingwiki.com/w/index.php?search=", extra: "&title=Special%3ASearch", icon: "https://pbs.twimg.com/profile_images/876511628258418689/Joehp5YI_400x400.jpg" },
+                { name: "HLTB", url: "https://howlongtobeat.com/?q=", icon: "https://howlongtobeat.com/favicon.ico" },
+                { name: "SDHQ", url: "https://steamdeckhq.com/?s=", icon: "https://pbs.twimg.com/profile_images/1539310786614419459/5ohiy0ZX_400x400.jpg" },
+                { name: "GameFAQs", url: "https://gamefaqs.gamespot.com/search?game=", icon: "https://gamefaqs.gamespot.com/favicon.ico" },
+                { name: "AWACY", url: "https://areweanticheatyet.com/?search=", icon: "https://areweanticheatyet.com/icon.webp" },
+                { name: "ProtonDB", url: "https://www.protondb.com/search?q=", icon: "https://www.protondb.com/sites/protondb/images/site-logo.svg"},
+                ];
+
+                searchSites.forEach(site => {
+                const link = document.createElement('a');
+                // Minimal change: only modify IsThereAnyDeal URL
+                let gameUrl = site.url + encodeURIComponent(gameName) + (site.extra || "");
+                if (site.name === "IsThereAnyDeal") {
+                    // Convert gameName into ITAD slug
+                    const slug = gameName
+                    .toLowerCase()
+                    .replace(/[^a-z0-9 ]/g, '') // remove special chars
+                    .trim()
+                    .replace(/\s+/g, '-');      // spaces → hyphens
+                    gameUrl = `${site.url}${slug}/info/`;
+                }
+
+
+                link.href = gameUrl;
+                link.target = "_blank";
+                link.style.display = "inline-flex";
+                link.style.alignItems = "center";
+                link.style.background = "rgba(36,40,47,0.7)";
+                link.style.color = "white";
+                link.style.fontSize = "13px";
+                link.style.padding = "4px 4px";
+                link.style.borderRadius = "6px";
+                link.style.textDecoration = "none";
+                link.style.transition = "background 0.2s"; // Smooth transition on hover
+
+                // Set initial background on hover state using CSS
+                link.onmouseover = () => {
+                    link.style.background = "rgba(80,80,80,0.9)";
+                };
+                link.onmouseout = () => {
+                    link.style.background = "rgba(36,40,47,0.7)";
+                };
+
+                const linkIcon = document.createElement('img');
+                linkIcon.src = site.icon;
+                linkIcon.style.width = "16px";
+                linkIcon.style.height = "16px";
+                linkIcon.style.marginRight = "4px";
+                link.prepend(linkIcon);
+
+                link.appendChild(document.createTextNode(site.name));
+                bottomLinks.appendChild(link);
+                });
+
+                const itadSite = {
+                    name:
+                        gameData.discounted_price && gameData.discount_percent
+                            ? `${gameData.discounted_price} (-${gameData.discount_percent}%)`
+                            : "",
+                    url: "https://isthereanydeal.com/game/",
+                    icon: "https://isthereanydeal.com/public/assets/logo-GBHE6XF2.svg"
+                };
+
+
+                const slug = gameName.toLowerCase()
+                    .replace(/[^a-z0-9 ]/g, '')
+                    .trim()
+                    .replace(/\s+/g, '-');
+
+                const itadUrl = `${itadSite.url}${slug}/info/`;
+
+                const itadLink = document.createElement('a');
+                itadLink.href = itadUrl;
+                itadLink.target = "_blank";
+                itadLink.style.display = "inline-flex";
+                itadLink.style.alignItems = "center";
+                itadLink.style.background = "rgba(36,40,47,0.7)";
+                itadLink.style.color = "white";
+                itadLink.style.fontSize = "13px";
+                itadLink.style.padding = "6px 12px";
+                itadLink.style.borderRadius = "12px";
+                itadLink.style.textDecoration = "none";
+                itadLink.style.width = "max-content"; // ← keeps button snug
+                rightColumn.style.display = "flex";
+                rightColumn.style.flexDirection = "column";
+                rightColumn.style.alignItems = "flex-end"; // ← aligns all children (including ITAD) to the right
+
+
+                itadLink.style.marginTop = "0px"; // spacing below description
+
+                itadLink.onmouseover = () => itadLink.style.background = "rgba(80,80,80,0.9)";
+                itadLink.onmouseout = () => itadLink.style.background = "rgba(36,40,47,0.7)";
+
+                const itadIcon = document.createElement('img');
+                itadIcon.src = itadSite.icon;
+                itadIcon.style.width = "16px";
+                itadIcon.style.height = "16px";
+                itadIcon.style.marginLeft = "3px"; // spacing between text and icon
+
+                itadIcon.style.marginRight = "0px";
+
+
+
+
+                // --- ORDER: TEXT LEFT, ICON RIGHT ---
+                if (itadSite.name) {
+                    itadLink.appendChild(document.createTextNode(itadSite.name));
+                }
+                itadLink.appendChild(itadIcon);
+
+                // append it **directly under description** in right column
+                rightColumn.appendChild(itadLink);
+
+
+
+
+
+                overlay.appendChild(bottomLinks);
+                div.appendChild(img);
+                div.appendChild(overlay);
+            });
+            }
+        }
+        });
+    }
+
+
+    function attachThemeMusicBehavior(musicBtn) {
+        const KEY = "ThemeMusicData";
+
+        const load = () => {
+            try { return JSON.parse(localStorage.getItem(KEY) || "{}"); }
+            catch { return {}; }
+        };
+
+        const save = (data) => {
+            try { localStorage.setItem(KEY, JSON.stringify(data)); }
+            catch(e){ console.error(e); }
+        };
+
+        let data = load();
+        let on = data.themeMusic === undefined ? true : !!data.themeMusic;
+
+        // --- Container ---
+        const container = document.createElement("div");
+        Object.assign(container.style, {
+            display: "inline-flex",
+            alignItems: "center",
+            position: "relative"
+        });
+        musicBtn.parentElement.insertBefore(container, musicBtn);
+        container.appendChild(musicBtn);
+
+        // Initial icon
+        musicBtn.textContent = on ? "🎵" : "🔇";
+
+        // --- Bubble tooltip ---
+        const bubble = document.createElement("div");
+        bubble.innerHTML = "Don't like what you hear? Use paste!";
+        Object.assign(bubble.style, {
+            position: "absolute",
+            bottom: "30px",       // ← move above the button
+            top: "auto",           // reset top
+            left: "0",
+            background: musicBtn.style.background,
+            color: musicBtn.style.color,
+            border: "none",
+            borderRadius: musicBtn.style.borderRadius,
+            padding: musicBtn.style.padding,
+            fontSize: musicBtn.style.fontSize,
+            whiteSpace: "nowrap",
+            opacity: "0",
+            transform: "translateY(10px)", // ← nudge down slightly for animation
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+            pointerEvents: "auto",
+            zIndex: "1000",
+            cursor: "default"
+        });
+
+        container.appendChild(bubble);
+
+        const showBubble = (text, isError=false) => {
+            if (!on) return;
+
+            if (text) {
+                bubble.innerHTML = text;
+            } else {
+                const themeData = load();
+                const current = themeData.currentlyPlaying;
+                let linkHTML = "hear";
+                if (current?.videoId) {
+                    const videoUrl = `https://youtu.be/${current.videoId}`;
+                    linkHTML = `<a href="${videoUrl}" target="_blank" style="color:#0af;text-decoration:underline; cursor:pointer;">hear</a>`;
+                }
+                bubble.innerHTML = `Don't like what you ${linkHTML}? Use paste!`;
+            }
+
+            bubble.style.opacity = "1";
+            bubble.style.transform = "translateY(0)";
+            bubble.style.backgroundColor = isError ? "#F44336" : musicBtn.style.background;
+        };
+
+        const hideBubble = () => {
+            bubble.style.opacity = "0";
+            bubble.style.transform = "translateY(-10px)";
+        };
+
+        // --- Paste button (pill style like music button) ---
+        const pasteBtn = document.createElement("button");
+        pasteBtn.textContent = "📋";
+        Object.assign(pasteBtn.style, {
+            background: musicBtn.style.background,
+            color: musicBtn.style.color,
+            border: "none",
+            borderRadius: musicBtn.style.borderRadius,  // pill shape
+            padding: musicBtn.style.padding,
+            fontSize: musicBtn.style.fontSize,
+            cursor: "pointer",
+            marginLeft: "6px",
+            opacity: 0,
+            pointerEvents: "none",
+            transition: "opacity 0.3s"
+        });
+        container.appendChild(pasteBtn);
+
+        // --- Paste button logic ---
+        pasteBtn.onclick = async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                const match = text.match(/(?:youtube\.com\/.*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                if (!match) return showBubble("Invalid YouTube link!", true);
+
+                const newVideoId = match[1];
+                const themeData = load();
+                const currentThemeName = themeData.currentlyPlaying?.name;
+                if (!currentThemeName || !themeData[currentThemeName])
+                    return showBubble("No theme currently playing!", true);
+
+                themeData[currentThemeName].videoId = newVideoId;
+                themeData[currentThemeName].timestamp = Date.now();
+                save(themeData);
+
+                musicBtn.textContent = "🎵";
+                showBubble(`Updated "${currentThemeName}"!`);
+                setTimeout(() => {
+                    pasteBtn.style.opacity = "0";
+                    pasteBtn.style.pointerEvents = "none";
+                }, 3000);
+            } catch (e) {
+                console.error(e);
+                showBubble("Failed to read clipboard.", true);
+            }
+        };
+
+        // --- Hover logic (includes bubble itself) ---
+        [musicBtn, pasteBtn, bubble].forEach(el => {
+            el.addEventListener("mouseenter", () => {
+                if (on) {
+                    showBubble();
+                    pasteBtn.style.opacity = "1";
+                    pasteBtn.style.pointerEvents = "auto";
+                }
+            });
+            el.addEventListener("mouseleave", () => {
+                setTimeout(() => {
+                    if (!on || ![musicBtn, pasteBtn, bubble].some(el => el.matches(':hover'))) {
+                        hideBubble();
+                        pasteBtn.style.opacity = "0";
+                        pasteBtn.style.pointerEvents = "none";
+                    }
+                }, 200); // slightly longer delay to allow moving into bubble
+            });
+        });
+
+        // --- Toggle music on/off ---
+        musicBtn.onclick = () => {
+            on = !on;
+            musicBtn.textContent = on ? "🎵" : "🔇";
+            const saved = load();
+            saved.themeMusic = on;
+            save(saved);
+            if (!on) {
+                hideBubble();
+                pasteBtn.style.opacity = "0";
+                pasteBtn.style.pointerEvents = "none";
+            }
+        };
+    }
+
+    replaceText();
+
+    // Only create a new observer if one doesn’t already exist
+    if (!window.steamEnhancerObserver) {
+        const observer = new MutationObserver(replaceText);
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        // Save it globally so future runs know it exists
+        window.steamEnhancerObserver = observer;
+    }
+
+}
+})();
+"""
+
+def inject_metadata_code(ws_socket):
+    inject_id = next(eval_id_counter)
+
+    wrapped_code = f"""
+    (function () {{
+        {METADATA_CODE}
+    }})();
+    """
+
+    send_ws_text(ws_socket, json.dumps({
+        "id": inject_id,
+        "method": "Runtime.evaluate",
+        "params": {
+            "expression": wrapped_code,
+            "awaitPromise": True
+        }
+    }))
+
+    recv_ws_message(ws_socket)
+
+
+for target in (TARGET_TITLE2, TARGET_TITLE3):
+    try:
+        ws_url = get_ws_url_by_title(WS_HOST, WS_PORT, target)
+        ws_socket = create_websocket_connection(ws_url)
+
+        send_ws_text(ws_socket, json.dumps({
+            "id": 1,
+            "method": "Runtime.enable"
+        }))
+        recv_ws_message(ws_socket)
+
+        inject_metadata_code(ws_socket)
+
+    except Exception as e:
+        print(f"Metadata injection failed for {target}: {e}")
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1369,6 +3281,7 @@ def get_next_available_key(shortcuts):
         key += 1
     return str(key)
 
+
 def get_compat_tool_if_needed(launchoptions):
     steam_compat_marker = 'STEAM_COMPAT_DATA_PATH'
     # Check for UMU-related Proton (UMU-Proton) and return None immediately if found
@@ -1376,22 +3289,24 @@ def get_compat_tool_if_needed(launchoptions):
         print("Exclusion: UMU-related shortcut detected.")
         return None
 
-    # Exclude Chrome and AppID 0
-    if 'chrome' in launchoptions or '--appid 0' in launchoptions:
-        print("Exclusion: Chrome or AppID 0 detected.")
+    if ('chrome' in launchoptions or
+        'brave' in launchoptions or
+        'edge' in launchoptions or
+        'firefox' in launchoptions or
+        'librewolf' in launchoptions or
+        'vivaldi' in launchoptions or
+        '--appid 0' in launchoptions):
+        print("Exclusion: Chrome, Brave, Edge, Firefox, LibreWolf, Vivaldi or AppID 0 detected.")
         return None
 
-    # Exclude based on app regions like jp., com., online.
     if any(x in launchoptions for x in ['jp.', 'com.', 'online.']):
         print("Exclusion: App region detected.")
         if steam_compat_marker not in launchoptions:
             print(f"Exclusion: {steam_compat_marker} not in launch options.")
             return None
 
-    # If none of the exclusions apply, return the compat tool name
     print("No exclusions applied. Returning compat tool.")
     return compat_tool_name
-
 
 
 
@@ -1430,7 +3345,7 @@ def create_new_entry(shortcutdirectory, appname, launchoptions, startingdir, lau
     unsigned_shortcut_id = get_unsigned_shortcut_id(signed_shortcut_id)
 
     # Only store app ID for specific launchers
-    if appname in ['Epic Games', 'Gog Galaxy', 'Ubisoft Connect', 'Battle.net', 'EA App', 'Amazon Games', 'itch.io', 'Legacy Games', 'Humble Bundle', 'IndieGala Client', 'Rockstar Games Launcher', 'Glyph', 'Minecraft Launcher', 'Playstation Plus', 'VK Play', 'HoYoPlay', 'Nexon Launcher', 'Game Jolt Client', 'Artix Game Launcher', 'ARC Launcher', 'PURPLE Launcher', 'Plarium Play', 'VFUN Launcher', 'Tempo Launcher', 'Pokémon Trading Card Game Live', 'Antstream Arcade', 'STOVE Client']:
+    if appname in ['Epic Games', 'Gog Galaxy', 'Ubisoft Connect', 'Battle.net', 'EA App', 'Amazon Games', 'itch.io', 'Legacy Games', 'Humble Bundle', 'IndieGala Client', 'Rockstar Games Launcher', 'Glyph', 'Minecraft Launcher', 'Playstation Plus', 'VK Play', 'HoYoPlay', 'Nexon Launcher', 'Game Jolt Client', 'Artix Game Launcher', 'ARC Launcher', 'PURPLE Launcher', 'Plarium Play', 'VFUN Launcher', 'Tempo Launcher', 'Pokémon Trading Card Game Live', 'Antstream Arcade', 'STOVE Client', 'Big Fish Games Manager', 'Gryphlink']:
         app_ids[appname] = unsigned_shortcut_id
 
     # Check if shortcut already exists with final values
@@ -1458,48 +3373,51 @@ def create_new_entry(shortcutdirectory, appname, launchoptions, startingdir, lau
                 continue
 
             try:
-                response = requests.head(url)
-                if response.status_code == 200:
-                    ext = url.split('.')[-1]
+                # Use urllib to perform a HEAD request (check URL status)
+                req = urllib.request.Request(url, method='HEAD')
+                with urllib.request.urlopen(req) as response:
+                    if response.status == 200:
+                        ext = url.split('.')[-1]
 
-                    if art_type == "icons":
-                        filename = get_file_name("icons", unsigned_shortcut_id)
-                    elif art_type == "logos":
-                        filename = f"{unsigned_shortcut_id}_logo.{ext}"
-                    elif art_type == "heroes":
-                        filename = f"{unsigned_shortcut_id}_hero.{ext}"
-                    elif art_type == "grids_600x900":
-                        filename = f"{unsigned_shortcut_id}p.{ext}"
-                    elif art_type == "grids_920x430":
-                        filename = f"{unsigned_shortcut_id}.{ext}"
+                        if art_type == "icons":
+                            filename = get_file_name("icons", unsigned_shortcut_id)
+                        elif art_type == "logos":
+                            filename = f"{unsigned_shortcut_id}_logo.{ext}"
+                        elif art_type == "heroes":
+                            filename = f"{unsigned_shortcut_id}_hero.{ext}"
+                        elif art_type == "grids_600x900":
+                            filename = f"{unsigned_shortcut_id}p.{ext}"
+                        elif art_type == "grids_920x430":
+                            filename = f"{unsigned_shortcut_id}.{ext}"
+                        else:
+                            continue
+
+                        file_path = f"{logged_in_home}/.steam/root/userdata/{steamid3}/config/grid/{filename}"
+
+                        # Download and use artwork directly — no file existence checks
+                        with urllib.request.urlopen(url) as img_response:
+                            img_data = img_response.read()
+
+                            if art_type == "icons":
+                                with open(file_path, 'wb') as f:
+                                    f.write(img_data)
+                                print(f"Downloaded and saved fallback icon: {filename}")
+                            else:
+                                encoded = b64encode(img_data).decode('utf-8')
+                                print(f"Downloaded fallback {art_type} as base64")
+
+                                if art_type == "logos" and not logo64:
+                                    logo64 = encoded
+                                elif art_type == "heroes" and not hero64:
+                                    hero64 = encoded
+                                elif art_type == "grids_600x900" and not gridp64:
+                                    gridp64 = encoded
+                                elif art_type == "grids_920x430" and not grid64:
+                                    grid64 = encoded
                     else:
-                        continue
-
-                    file_path = f"{logged_in_home}/.steam/root/userdata/{steamid3}/config/grid/{filename}"
-
-                    # Download and use artwork directly — no file existence checks
-                    img_data = requests.get(url).content
-                    if art_type == "icons":
-                        with open(file_path, 'wb') as f:
-                            f.write(img_data)
-                        print(f"Downloaded and saved fallback icon: {filename}")
-                    else:
-                        encoded = b64encode(img_data).decode('utf-8')
-                        print(f"Downloaded fallback {art_type} as base64")
-
-                        if art_type == "logos" and not logo64:
-                            logo64 = encoded
-                        elif art_type == "heroes" and not hero64:
-                            hero64 = encoded
-                        elif art_type == "grids_600x900" and not gridp64:
-                            gridp64 = encoded
-                        elif art_type == "grids_920x430" and not grid64:
-                            grid64 = encoded
-                else:
-                    print(f"Fallback URL invalid for {art_type} - {url}")
+                        print(f"Fallback URL invalid for {art_type} - {url}")
             except Exception as e:
                 print(f"Error downloading fallback artwork for {art_type}: {e}")
-
 
 
 
@@ -1559,11 +3477,19 @@ def create_new_entry(shortcutdirectory, appname, launchoptions, startingdir, lau
         print("Shortcut creation result:", result)
 
         shortcut_id = None
+        m_gameid = None
         if result and 'result' in result:
             value = result['result']['result'].get('value')
             if isinstance(value, dict) and value.get('success'):
                 shortcut_id = value.get('shortcutId')
+                m_gameid = value.get('m_gameid')
                 print("App ID returned from JS:", shortcut_id)
+                print(f"Found m_gameid: {m_gameid}")
+
+
+
+
+                create_exec_line_from_entry(logged_in_home, new_entry, m_gameid)
 
 
 
@@ -1610,7 +3536,7 @@ def fetch_and_parse_csv():
     # Try local UMU database first
     try:
         dir_path = f"{logged_in_home}/.steam/root/compatibilitytools.d"
-        pattern = re.compile(r"(UMU|GE)-Proton-(\d+(?:\.\d+)*)(?:-(\d+(?:\.\d+)*))?")
+        pattern = re.compile(r"(UMU|GE)-Proton-?(\d+(?:\.\d+)*)(?:-(\d+(?:\.\d+)*))?")
 
         def parse_version(m):
             main, sub = m.groups()[1:]
@@ -1640,11 +3566,13 @@ def fetch_and_parse_csv():
 
     # Fallback to online if local fails
     try:
-        response = requests.get(CSV_URL, timeout=5)
-        response.raise_for_status()
-        csv_data = [row for row in csv.DictReader(response.text.splitlines())]
-        print("Fetched UMU database from online as fallback.")
-    except requests.exceptions.RequestException as e:
+        with urllib.request.urlopen(CSV_URL, timeout=5) as response:
+            if response.status != 200:
+                raise Exception(f"HTTP {response.status}")
+            content = response.read().decode('utf-8')
+            csv_data = [row for row in csv.DictReader(content.splitlines())]
+            print("Fetched UMU database from online as fallback.")
+    except (urllib.error.URLError, Exception) as e:
         print(f"Failed to fetch UMU data from the internet: {e}")
         csv_data = []
 
@@ -1797,12 +3725,13 @@ def modify_shortcut_for_umu(appname, exe, launchoptions, startingdir):
 
 
 
-def track_create_entry(directory, name, launch_options, starting_dir):
+def track_create_entry(directory, name, launch_options, starting_dir, launcher_name="NonSteamLaunchers"):
     if not any([directory, launch_options, starting_dir]):
         return  # Skip if not installed
 
-    create_new_entry(directory, name, launch_options, starting_dir)
+    create_new_entry(directory, name, launch_options, starting_dir, launcher_name)
     track_game(name, "Launcher")
+
 
 
 track_create_entry(os.environ.get('epicshortcutdirectory'), 'Epic Games', os.environ.get('epiclaunchoptions'), os.environ.get('epicstartingdir'))
@@ -1832,80 +3761,147 @@ track_create_entry(os.environ.get('arcshortcutdirectory'), 'ARC Launcher', os.en
 track_create_entry(os.environ.get('poketcgshortcutdirectory'), 'Pokémon Trading Card Game Live', os.environ.get('poketcglaunchoptions'), os.environ.get('poketcgstartingdir'))
 track_create_entry(os.environ.get('antstreamshortcutdirectory'), 'Antstream Arcade', os.environ.get('antstreamlaunchoptions'), os.environ.get('antstreamstartingdir'))
 track_create_entry(os.environ.get('stoveshortcutdirectory'), 'STOVE Client', os.environ.get('stovelaunchoptions'), os.environ.get('stovestartingdir'))
+track_create_entry(os.environ.get('bigfishshortcutdirectory'), 'Big Fish Games Manager', os.environ.get('bigfishlaunchoptions'), os.environ.get('bigfishstartingdir'))
+track_create_entry(os.environ.get('gryphlinkshortcutdirectory'), 'Gryphlink', os.environ.get('gryphlinklaunchoptions'), os.environ.get('gryphlinkstartingdir'))
+
+
 track_create_entry(os.environ.get('repaireaappshortcutdirectory'), 'Repair EA App', os.environ.get('repaireaapplaunchoptions'), os.environ.get('repaireaappstartingdir'))
 
 
 
 
 
-create_new_entry(os.environ.get('chromedirectory'), 'Xbox Game Pass', os.environ.get('xboxchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Better xCloud', os.environ.get('xcloudchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'GeForce Now', os.environ.get('geforcechromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Boosteroid Cloud Gaming', os.environ.get('boosteroidchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Stim.io', os.environ.get('stimiochromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'WatchParty', os.environ.get('watchpartychromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Netflix', os.environ.get('netflixchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Hulu', os.environ.get('huluchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Tubi', os.environ.get('tubichromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Disney+', os.environ.get('disneychromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Amazon Prime Video', os.environ.get('amazonchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Youtube', os.environ.get('youtubechromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Youtube TV', os.environ.get('youtubetvchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Amazon Luna', os.environ.get('lunachromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Twitch', os.environ.get('twitchchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Venge', os.environ.get('vengechromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Rocketcrab', os.environ.get('rocketcrabchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Fortnite', os.environ.get('fortnitechromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Cloudy Pad', os.environ.get('cloudychromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'WebRcade', os.environ.get('webrcadechromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'WebRcade Editor', os.environ.get('webrcadeeditchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Afterplay.io', os.environ.get('afterplayiochromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'OnePlay', os.environ.get('oneplaychromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'AirGPU', os.environ.get('airgpuchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'CloudDeck', os.environ.get('clouddeckchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'JioGamesCloud', os.environ.get('jiochromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Plex', os.environ.get('plexchromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Apple TV+', os.environ.get('applechromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'Crunchyroll', os.environ.get('crunchychromelaunchoptions'), os.environ.get('chrome_startdir'))
-create_new_entry(os.environ.get('chromedirectory'), 'PokéRogue', os.environ.get('pokeroguechromelaunchoptions'), os.environ.get('chrome_startdir'))
+def detect_browser_name(chromedir: str, launch_opts: str) -> str:
+    combined = f"{chromedir} {launch_opts}"
+    if "com.google.Chrome" in combined:
+        return "Google Chrome"
+    elif "org.mozilla.firefox" in combined:
+        return "Mozilla Firefox"
+    elif "com.microsoft.Edge" in combined:
+        return "Microsoft Edge"
+    elif "com.brave.Browser" in combined:
+        return "Brave"
+    elif "com.vivaldi.Vivaldi" in combined:
+        return "Vivaldi"
+    elif "io.gitlab.librewolf-community" in combined:
+        return "LibreWolf"
+    else:
+        return "Unknown"
+
+def browser_for_env(envvar: str) -> str:
+    opts = os.environ.get(envvar, "")
+    return detect_browser_name(chromedirectory, opts)
+
+
+create_new_entry(chromedirectory, 'Xbox Game Pass', os.environ.get('xboxchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('xboxchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Better xCloud', os.environ.get('xcloudchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('xcloudchromelaunchoptions'))
+create_new_entry(chromedirectory, 'GeForce Now', os.environ.get('geforcechromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('geforcechromelaunchoptions'))
+create_new_entry(chromedirectory, 'Boosteroid Cloud Gaming', os.environ.get('boosteroidchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('boosteroidchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Stim.io', os.environ.get('stimiochromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('stimiochromelaunchoptions'))
+create_new_entry(chromedirectory, 'WatchParty', os.environ.get('watchpartychromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('watchpartychromelaunchoptions'))
+create_new_entry(chromedirectory, 'Netflix', os.environ.get('netflixchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('netflixchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Hulu', os.environ.get('huluchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('huluchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Tubi', os.environ.get('tubichromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('tubichromelaunchoptions'))
+create_new_entry(chromedirectory, 'Disney+', os.environ.get('disneychromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('disneychromelaunchoptions'))
+create_new_entry(chromedirectory, 'Amazon Prime Video', os.environ.get('amazonchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('amazonchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Youtube', os.environ.get('youtubechromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('youtubechromelaunchoptions'))
+create_new_entry(chromedirectory, 'Youtube TV', os.environ.get('youtubetvchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('youtubetvchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Amazon Luna', os.environ.get('lunachromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('lunachromelaunchoptions'))
+create_new_entry(chromedirectory, 'Twitch', os.environ.get('twitchchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('twitchchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Venge', os.environ.get('vengechromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('vengechromelaunchoptions'))
+create_new_entry(chromedirectory, 'Super Monkey Ball Online', os.environ.get('monkeychromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('monkeychromelaunchoptions'))
+create_new_entry(chromedirectory, 'Rocketcrab', os.environ.get('rocketcrabchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('rocketcrabchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Fortnite', os.environ.get('fortnitechromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('fortnitechromelaunchoptions'))
+create_new_entry(chromedirectory, 'Cloudy Pad', os.environ.get('cloudychromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('cloudychromelaunchoptions'))
+create_new_entry(chromedirectory, 'WebRcade', os.environ.get('webrcadechromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('webrcadechromelaunchoptions'))
+create_new_entry(chromedirectory, 'WebRcade Editor', os.environ.get('webrcadeeditchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('webrcadeeditchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Afterplay.io', os.environ.get('afterplayiochromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('afterplayiochromelaunchoptions'))
+create_new_entry(chromedirectory, 'OnePlay', os.environ.get('oneplaychromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('oneplaychromelaunchoptions'))
+create_new_entry(chromedirectory, 'AirGPU', os.environ.get('airgpuchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('airgpuchromelaunchoptions'))
+create_new_entry(chromedirectory, 'CloudDeck', os.environ.get('clouddeckchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('clouddeckchromelaunchoptions'))
+create_new_entry(chromedirectory, 'JioGamesCloud', os.environ.get('jiochromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('jiochromelaunchoptions'))
+create_new_entry(chromedirectory, 'Plex', os.environ.get('plexchromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('plexchromelaunchoptions'))
+create_new_entry(chromedirectory, 'Apple TV+', os.environ.get('applechromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('applechromelaunchoptions'))
+create_new_entry(chromedirectory, 'Crunchyroll', os.environ.get('crunchychromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('crunchychromelaunchoptions'))
+create_new_entry(chromedirectory, 'PokéRogue', os.environ.get('pokeroguechromelaunchoptions'), os.environ.get('chrome_startdir'), launcher_name=browser_for_env('pokeroguechromelaunchoptions'))
+
+
 
 # Iterate over each custom website
-for custom_website in custom_websites:
-    # Check if the custom website is not an empty string
-    if custom_website:
-        # Remove any leading or trailing spaces from the custom website URL
-        custom_website = custom_website.strip()
+for i, website in enumerate(custom_websites):
+    if not website.startswith(("http://", "https://")):
+        website = f"https://{website}"
 
-        # Remove the 'http://' or 'https://' prefix and the 'www.' prefix, if present
-        clean_website = custom_website.replace('http://', '').replace('https://', '').replace('www.', '')
+    parts = urlsplit(website)
+    encoded_path = quote(parts.path, safe="/")
+    url = urlunsplit((
+        parts.scheme,
+        parts.netloc,
+        encoded_path,
+        parts.query,
+        parts.fragment
+    ))
 
-        # Define a regular expression pattern to extract the game name from the URL
-        pattern = r'/games/([\w-]+)'
+    if i < len(custom_names) and custom_names[i]:
+        game_name = custom_names[i]
+    else:
+        clean = (
+            website.replace("http://", "")
+                   .replace("https://", "")
+                   .replace("www.", "")
+                   .rstrip("/")
+        )
 
-        # Use the regular expression to search for the game name in the custom website URL
-        match = re.search(pattern, custom_website)
-
-        # Check if a match was found
+        match = re.search(r"/games/([^/]+)", website)
         if match:
-            # Extract the game name from the match object
-            game_name = match.group(1)
-
-            # Replace hyphens with spaces
-            game_name = game_name.replace('-', ' ')
-
-            # Capitalize the first letter of each word in the game name
-            game_name = game_name.title()
+            game_name = (
+                match.group(1)
+                .replace("-", " ")
+                .replace("%27", "'")
+                .title()
+            )
         else:
-            # Use the entire URL as the entry name
-            game_name = clean_website
+            game_name = clean.split("/")[0].title()
 
-        # Define the launch options for this website
-        chromelaunch_options = f'run --branch=stable --arch=x86_64 --command=/app/bin/chrome --file-forwarding com.google.Chrome @@u @@ --window-size=1280,800 --force-device-scale-factor=1.00 --device-scale-factor=1.00 --start-fullscreen https://{clean_website}/ --no-first-run --enable-features=OverlayScrollbar'
+    launch_options = f"{base_launch_options} {url}"
 
-        # Call the create_new_entry function for this website
-        create_new_entry(os.environ['chromedirectory'], game_name, chromelaunch_options, os.environ['chrome_startdir'])
+    create_new_entry(
+        os.environ["chromedirectory"],
+        game_name,
+        launch_options,
+        os.environ["chrome_startdir"],
+        launcher_name=browser_for_env('customchromelaunchoptions')
+    )
+
+
+
+def remove_unwanted_lines(lines, remove_keys):
+    lines_to_keep = []
+    modified = False
+
+    for line in lines:
+        if not any(key in line for key in remove_keys):
+            lines_to_keep.append(line)
+        else:
+            modified = True
+
+    return lines_to_keep, modified
+
+
+remove_lines = {
+    'chromelaunchoptions',
+    'websites_str',
+    'custom_website_names_str'
+}
+
+lines_to_keep, modified = remove_unwanted_lines(lines, remove_lines)
+
+if modified:
+    with open(env_vars_path, 'w') as f:
+        f.writelines(lines_to_keep)
 
 #End of Creating Launcher Shortcuts
+
 
 
 #Custom Shortcut for NSL
@@ -1975,6 +3971,8 @@ folder_names = {
     'Pokémon Trading Card Game Live': 'PokeTCGLauncher',
     'Antstream Arcade': 'AntstreamLauncher',
     'STOVE Client': 'STOVELauncher',
+    'Big Fish Games Manager': 'BigFishLauncher',
+    'Gryphlink': 'GryphlinkLauncher',
 }
 
 
@@ -2131,8 +4129,8 @@ if os.path.exists(dat_file_path) and os.path.exists(item_dir):
             # Initialize variables
             display_name = item_data['DisplayName']
             app_name = item_data['AppName']
-            exe_path = f"\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{epic_games_launcher}/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries/Win32/EpicGamesLauncher.exe\""
-            start_dir = f"\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{epic_games_launcher}/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries/Win32/\""
+            exe_path = f"\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{epic_games_launcher}/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe\""
+            start_dir = f"\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{epic_games_launcher}/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/\""
             launch_options = f"STEAM_COMPAT_DATA_PATH=\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{epic_games_launcher}/\" %command% -'com.epicgames.launcher://apps/{app_name}?action=launch&silent=true'"
 
             # Check if the game is still installed and if the LaunchExecutable is valid, not content-related, and is a .exe file
@@ -2222,6 +4220,8 @@ else:
 
 # End of Ubisoft Game Scanner
 
+
+
 #EA App Scanner
 def fix_encoding(text):
     # Encode as latin1 bytes, then decode as utf-8 to fix mojibake
@@ -2229,10 +4229,8 @@ def fix_encoding(text):
 
 def extract_games_fixed(filename):
     games = {}
-
     key_re = re.compile(r'\[Software\\\\Wow6432Node\\\\Origin Games\\\\(\d+)\]')
     name_re = re.compile(r'"DisplayName"="(.+)"')
-
     current_id = None
 
     with open(filename, 'r', encoding='utf-8') as f:
@@ -2246,11 +4244,8 @@ def extract_games_fixed(filename):
                 name_match = name_re.search(line)
                 if name_match:
                     raw_name = name_match.group(1)
-                    # Replace \x2122 with trademark symbol
                     raw_name = raw_name.replace(r'\x2122', '™')
-                    # Decode other escaped sequences like \x21 etc.
                     name = bytes(raw_name, "utf-8").decode("unicode_escape")
-                    # Fix mojibake by re-encoding/decoding
                     name = fix_encoding(name)
                     games[current_id] = name
                     current_id = None
@@ -2258,12 +4253,10 @@ def extract_games_fixed(filename):
     return games
 
 def get_ea_app_game_info(installed_games, game_directory_path, sys_reg_file=None):
-    # If provided, parse the sys reg file once for fallback IDs
     sys_reg_games = {}
     if sys_reg_file and os.path.isfile(sys_reg_file):
         try:
             sys_reg_games = extract_games_fixed(sys_reg_file)
-            # Reverse mapping for lookup by game name:
             sys_reg_name_to_id = {v: k for k, v in sys_reg_games.items()}
         except Exception as e:
             print(f"Error reading sys reg fallback file: {e}")
@@ -2299,14 +4292,16 @@ def get_ea_app_game_info(installed_games, game_directory_path, sys_reg_file=None
             if game_name is None:
                 game_name = game
 
-            matched_id = None  # Track fallback match
+            game_name = re.sub(r'\s*\([^)]*\)$', '', game_name)
 
-            # If no ID found in XML, fallback to sys reg lookup by matching name
+
+            matched_id = None
+
             if not ea_ids and sys_reg_name_to_id:
-                print(f"No ID found in XML for '{game_name}', looking in system registry fallback...")
-
-                # Match game_name exactly or case-insensitive if needed
+                print(f"No ID found in XML for '{game_name}', checking registry fallback...")
                 for reg_name, reg_id in sys_reg_name_to_id.items():
+
+                    clean_reg_name = re.sub(r'\s*\([^)]*\)$', '', reg_name)
                     if reg_name == game_name:
                         matched_id = reg_id
                         break
@@ -2315,22 +4310,20 @@ def get_ea_app_game_info(installed_games, game_directory_path, sys_reg_file=None
 
             if ea_ids:
                 if matched_id:
-                    print(f"Found ID in system registry fallback for '{game_name}': {ea_ids}")
+                    print(f"Found ID in registry fallback for '{game_name}': {ea_ids}")
                 else:
                     print(f"Found ID in XML for '{game_name}': {ea_ids}")
                 game_dict[game_name] = ea_ids
             else:
-                print(f"Skipping '{game_name}' - no OfferID found in installerdata.xml or sys reg fallback.")
+                print(f"Skipping '{game_name}' - no OfferID found in XML or registry.")
 
         except Exception as e:
             print(f"Error parsing XML for {game}: {e}")
 
     return game_dict
 
-
 def find_ea_games_path_from_registry():
     registry_path = f"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/pfx/system.reg"
-
     if not os.path.isfile(registry_path):
         print("EA App registry file not found. Skipping registry check.")
         return None
@@ -2384,132 +4377,127 @@ def find_external_game_paths():
                     possible_paths.append(path)
                     break
         except Exception:
-            continue  # Permission errors etc.
+            continue
 
     return [p for p in possible_paths if os.path.isdir(p)]
 
-
-
+# --- Main EA App Scanner ---
 if not ea_app_launcher:
     print("EA App launcher ID not set. Skipping EA App Scanner.")
 else:
-    # 1. Try default and legacy EA Games paths
+    game_directory_path = None
+
+    # 1. Default paths
     default_paths = [
         f"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/pfx/drive_c/Program Files/EA Games/",
         f"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/pfx/drive_c/Program Files (x86)/EA Games/"
     ]
-
-    game_directory_path = None
     for path in default_paths:
         if os.path.isdir(path):
             game_directory_path = path
+            print(f"Found EA App games in default path: {path}")
             break
 
-    detected_path = find_ea_games_path_from_registry()
-    if detected_path and os.path.isdir(detected_path):
-        game_directory_path = detected_path
+    # 2. Registry fallback
+    if not game_directory_path:
+        detected_path = find_ea_games_path_from_registry()
+        if detected_path and os.path.isdir(detected_path):
+            game_directory_path = detected_path
+            print(f"Found EA App games via registry: {detected_path}")
 
-    # 3. Check external SD card folders
-    if not os.path.isdir(game_directory_path):
+    # 3. External drives
+    if not game_directory_path:
         external_paths = find_external_game_paths()
         if external_paths:
             game_directory_path = external_paths[0]
             print(f"Using external EA App game path: {game_directory_path}")
 
-    # Final scan
-    if not os.path.isdir(game_directory_path):
+    # 4. Validate path
+    if not game_directory_path or not os.path.isdir(game_directory_path):
         print("EA App game data not found. Skipping EA App Scanner.")
+        print("Paths tried:", default_paths)
+        print("Registry detected path:", detected_path if 'detected_path' in locals() else None)
+        print("External paths:", external_paths if 'external_paths' in locals() else None)
     else:
         try:
-            installed_games = [g for g in os.listdir(game_directory_path) if os.path.isdir(os.path.join(game_directory_path, g))]
+            installed_games = [g for g in os.listdir(game_directory_path)
+                               if os.path.isdir(os.path.join(game_directory_path, g))]
 
-            # Pass sys reg file path here for fallback (adjust the path accordingly)
             sys_reg_path = f"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/pfx/system.reg"
 
             game_dict = get_ea_app_game_info(installed_games, game_directory_path, sys_reg_file=sys_reg_path)
 
-            for game, ea_ids in game_dict.items():
-                launch_options = f'STEAM_COMPAT_DATA_PATH="{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/" %command% "origin2://game/launch?offerIds={ea_ids}"'
-                exe_path = f'"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/pfx/drive_c/Program Files/Electronic Arts/EA Desktop/EA Desktop/EALaunchHelper.exe"'
-                start_dir = f'"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/pfx/drive_c/Program Files/Electronic Arts/EA Desktop/EA Desktop/"'
+            if not game_dict:
+                print("No EA App games found in scanned directories.")
+            else:
+                for game, ea_ids in game_dict.items():
+                    launch_options = f'STEAM_COMPAT_DATA_PATH="{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/" %command% "origin2://game/launch?offerIds={ea_ids}"'
+                    exe_path = f'"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/pfx/drive_c/Program Files/Electronic Arts/EA Desktop/EA Desktop/EALaunchHelper.exe"'
+                    start_dir = f'"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{ea_app_launcher}/pfx/drive_c/Program Files/Electronic Arts/EA Desktop/EA Desktop/"'
 
-                create_new_entry(exe_path, game, launch_options, start_dir, launcher_name="EA App")
-                track_game(game, "EA App")
+                    create_new_entry(exe_path, game, launch_options, start_dir, launcher_name="EA App")
+                    track_game(game, "EA App")
+
         except Exception as e:
             print(f"Error scanning EA App games: {e}")
-
 # End of EA App Scanner
 
 
 
 
+
+
 #GOG Galaxy Scanner
-def getGogGameInfoFromDB(db_path):
+
+def getGogGameInfoDB(db_path, logged_in_home, gog_galaxy_launcher):
     if not os.path.exists(db_path):
-        print(f"Database file not found at: {db_path}")
+        print(f"GOG Galaxy DB not found, skipping GOG Scanner: {db_path}")
         return {}
 
     game_dict = {}
 
-    def get_executables(cursor, product_id):
-        cursor.execute("""
-            SELECT installPath FROM GameFiles
-            WHERE productId = ? AND installPath LIKE '%.exe'
-        """, (product_id,))
-        return [row[0] for row in cursor.fetchall()]
-
-    def filter_executables(executables, title, install_path):
-        junk = {
-            "unitycrashhandler64.exe", "unitycrashhandler32.exe",
-            "crashreportclient.exe", "ue4prereqsetup_x64.exe",
-            "ue4prereqsetup.exe", "dotnetfx.exe"
-        }
-        title_key = title.lower().translate(str.maketrans('', '', ' :-_'))
-        base = install_path.replace("\\", "/").lower()
-
-        def score(exe):
-            name = os.path.basename(exe).lower()
-            if name in junk or "win64" in name or "win32" in name:
-                return None
-            name_key = name.translate(str.maketrans('', '', ' :-_'))
-            if title_key in name_key:
-                return (1, exe)
-            path = os.path.dirname(exe).replace("\\", "/").lower()
-            if path.startswith(base):
-                rel = path[len(base):].strip("/")
-                if not rel or title_key in rel.replace(" ", "").replace("_", "").replace("-", ""):
-                    return (2, exe)
-            return (3, exe)
-
-        scored = filter(None, (score(e) for e in executables))
-        return [exe for _, exe in sorted(scored, key=lambda x: (x[0], len(x[1])))]
-
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
+
+            # Pull only the *default* PlayTask using isPrimary = 1
             cursor.execute("""
-                SELECT ibp.productId, ld.title, ibp.installationPath, ptl.executablePath
+                SELECT
+                    ibp.productId,
+                    ld.title,
+                    ibp.installationPath,
+                    ptl.executablePath,
+                    ptl.commandLineArgs
                 FROM InstalledBaseProducts ibp
-                JOIN LimitedDetails ld ON ibp.productId = ld.productId
-                LEFT JOIN PlayTasks pt ON pt.gameReleaseKey = ld.id
-                LEFT JOIN PlayTaskLaunchParameters ptl ON ptl.playTaskId = pt.id
+                JOIN LimitedDetails ld
+                    ON ibp.productId = ld.productId
+                LEFT JOIN PlayTasks pt
+                    ON pt.gameReleaseKey = 'gog_' || ibp.productId
+                   AND pt.isPrimary = 1
+                LEFT JOIN PlayTaskLaunchParameters ptl
+                    ON ptl.playTaskId = pt.id
                 WHERE ld.is_production = 1
             """)
 
-            for pid, title, path, ptl_exe in cursor.fetchall():
-                exes = []
-                if ptl_exe:
-                    exes.append(ptl_exe.replace("\\", "/"))
-                exes += [os.path.join(path, e).replace("\\", "/") for e in get_executables(cursor, pid)]
-                if not exes:
+            for pid, title, install_path, ptl_exe, ptl_args in cursor.fetchall():
+                if not ptl_exe:
                     continue
 
-                main_exes = filter_executables(set(exes), title, path)
-                if main_exes:
-                    game_dict[title] = {
-                        'id': pid,
-                        'exe': main_exes[0]  # Use the top-scoring .exe
-                    }
+                exe_win_path = ptl_exe.replace("/", "\\").strip()
+
+                proton_root = f"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/pfx"
+                win_no_drive = re.sub(r"^[A-Za-z]:/", "", exe_win_path.replace("\\", "/"))
+                exe_proton_path = os.path.join(proton_root, "drive_c", win_no_drive)
+
+                if not os.path.exists(exe_proton_path):
+                    print(f"Skipping {title}: EXE not on disk -> {exe_proton_path}")
+                    continue
+
+                game_dict[title] = {
+                    "id": pid,
+                    "exe": exe_win_path,
+                    "launchParams": ptl_args or ""
+                }
 
     except sqlite3.Error as e:
         print(f"SQLite error: {e}")
@@ -2517,50 +4505,47 @@ def getGogGameInfoFromDB(db_path):
     return game_dict
 
 
-def adjust_dosbox_launch_options(launch_command, game_id):
-    print(f"Adjusting launch options for command: {launch_command}")
-    if "dosbox.exe" in launch_command.lower():
-        try:
-            exe_part, args_part = launch_command.split("DOSBox.exe", 1)
-            exe_path = exe_part.strip() + "DOSBox.exe"
-            args = args_part.strip()
+def adjust_dosbox_launch_options(launch_command, game_id, logged_in_home, gog_galaxy_launcher, launch_args=""):
+    """Build Steam launch string, including DOSBox arguments if present."""
+    launch_lower = launch_command.lower()
 
-            launch_options = (
-                f'STEAM_COMPAT_DATA_PATH="{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/" '
-                f'%command% /command=runGame /gameId={game_id} /path="{exe_path}" "{args}"'
-            )
-            return launch_options
-        except ValueError as e:
-            print(f"Error adjusting launch options: {e}")
-            return launch_command
-    else:
-        launch_command = launch_command.strip()
+    exe_path = launch_command
+
+    if "dosbox.exe" in launch_lower:
+        args = launch_args.strip()
         return (
             f'STEAM_COMPAT_DATA_PATH="{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/" '
-            f'%command% /command=runGame /gameId={game_id} /path="{launch_command}"'
+            f'%command% /command=runGame /gameId={game_id} /path="{exe_path}" "{args}"'
         )
 
+    return (
+        f'STEAM_COMPAT_DATA_PATH="{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/" '
+        f'%command% /command=runGame /gameId={game_id} /path="{exe_path}"'
+    )
 
-gog_games_directory = f"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/pfx/drive_c/Program Files (x86)/GOG Galaxy/Games"
+
+
 db_path = f"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/pfx/drive_c/ProgramData/GOG.com/Galaxy/storage/galaxy-2.0.db"
 
-if not os.path.exists(gog_games_directory) or not os.path.exists(db_path):
-    print("One or more paths do not exist.")
-    print("GOG Galaxy game data not found. Skipping GOG Galaxy Games Scanner.")
+if os.path.exists(db_path):
+    game_dict = getGogGameInfoDB(db_path, logged_in_home, gog_galaxy_launcher)
+
+    for game, info in game_dict.items():
+        launch_options = adjust_dosbox_launch_options(
+            info['exe'], info['id'], logged_in_home, gog_galaxy_launcher, launch_args=info['launchParams']
+        )
+
+        exe_path = f"\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/pfx/drive_c/Program Files (x86)/GOG Galaxy/GalaxyClient.exe\""
+        start_dir = f"\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/pfx/drive_c/Program Files (x86)/GOG Galaxy/\""
+
+        create_new_entry(exe_path, game, launch_options, start_dir, launcher_name="GOG Galaxy")
+        track_game(game, "GOG Galaxy")
 else:
-    game_dict = getGogGameInfoFromDB(db_path)
+    print(f"GOG Galaxy DB not found at {db_path}")
 
-    for game, game_info in game_dict.items():
-        if game_info['id']:
-            launch_options = adjust_dosbox_launch_options(game_info['exe'], game_info['id'])
-
-            exe_path = f"\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/pfx/drive_c/Program Files (x86)/GOG Galaxy/GalaxyClient.exe\""
-            start_dir = f"\"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gog_galaxy_launcher}/pfx/drive_c/Program Files (x86)/GOG Galaxy/\""
-
-            create_new_entry(exe_path, game, launch_options, start_dir, launcher_name="GOG Galaxy")
-            track_game(game, "GOG Galaxy")
 
 #End of GOG Galaxy Scanner
+
 
 
 
@@ -2604,6 +4589,8 @@ flavor_mapping = {
     "Aqua": "Avowed",
     "LBRA": "Tony Hawk's Pro Skater 3 + 4",
     "SCOR": "Sea of Thieves",
+    "ARK": "The Outer Worlds 2",
+
 
 
 
@@ -2693,7 +4680,7 @@ if game_dict:
 
 
 
-        
+
         elif game_key == "seaofthieves":
             print("Handling 'seaofthieves' as 'SCOR'")
             game_key = "SCOR"
@@ -2831,7 +4818,7 @@ else:
             # Check if candidates exist and are not empty
             if candidates:
                 executable_path = candidates[0].get('path', None)
-                
+
                 # If there's no valid executable path, skip this entry
                 if not executable_path:
                     print(f"Skipping game (no executable found): {game_info[2]}")
@@ -2863,7 +4850,7 @@ else:
 
     # Close the database connection
     conn.close()
-    
+
 # End of Itch.io Scanner
 
 
@@ -3375,62 +5362,74 @@ else:
 
 
 
-# chrome bookmark scanner for xbox and geforce
 
-# Path to the Chrome Bookmarks file
+#chrome scanner for xbox, geforce now, and amazon luna bookmarks
 bookmarks_file_path = f"{logged_in_home}/.var/app/com.google.Chrome/config/google-chrome/Default/Bookmarks"
 
-# Check if the bookmarks file exists
+# Lists to store results
+geforce_now_urls = []
+xbox_urls = []
+luna_urls = []
+seen_urls = set()
+
+def process_bookmark_item(item):
+    if item['type'] == "url":
+        name = item['name'].strip()
+        url = item['url']
+
+        if not name or url in seen_urls:
+            return
+
+        # GeForce NOW
+        if "play.geforcenow.com/games" in url:
+            if name == "GeForce NOW":
+                return
+            game_name = name.replace(" on GeForce NOW", "").strip()
+            url = url.split("&")[0] if "&" in url else url
+            if url in seen_urls:
+                return
+            geforce_now_urls.append(("GeForce NOW", game_name, url))
+            seen_urls.add(url)
+
+        # Xbox Cloud Gaming
+        elif "xbox.com/" in url and ("/play/launch/" in url or "/play/games/" in url):
+            if name.startswith("Play "):
+                game_name = name.replace("Play ", "").split(" |")[0].strip()
+            else:
+                game_name = name.split(" |")[0].strip()
+
+            if game_name:
+                xbox_urls.append(("Xbox", game_name, url))
+                seen_urls.add(url)
+
+        # Amazon Luna
+        elif "luna.amazon." in url and "/game/" in url:
+            if name.startswith("Play "):
+                game_name = name.replace("Play ", "").split(" |")[0].strip()
+            else:
+                game_name = name.split(" |")[0].strip()
+
+            if game_name:
+                luna_urls.append(("Amazon Luna", game_name, url))
+                seen_urls.add(url)
+
+def scan_children(children):
+    for item in children:
+        if item['type'] == "folder":
+            scan_children(item.get('children', []))
+        else:
+            process_bookmark_item(item)
+
 if not os.path.exists(bookmarks_file_path):
     print("Chrome Bookmarks not found. Skipping scanning for Bookmarks.")
 else:
-    # Lists to store results
-    geforce_now_urls = []
-    xbox_urls = []
-    luna_urls = []
-
     with open(bookmarks_file_path, 'r') as f:
         data = json.load(f)
 
-    # Loop through the "Other bookmarks" folder
-    for item in data['roots']['other']['children']:
-        if item['type'] == "url":
-            name = item['name'].strip()
-            url = item['url']
-
-            if not name:
-                continue
-                
-            # GeForce NOW
-            if "play.geforcenow.com/games" in url:
-                if name == "GeForce NOW":
-                    continue
-                game_name = name.replace(" on GeForce NOW", "").strip()
-                url = url.split("&")[0] if "&" in url else url
-                geforce_now_urls.append(("GeForce NOW", game_name, url))
-
-
-            # Xbox Cloud Gaming
-            elif "www.xbox.com/en-US/play/games/" in url:
-                # Clean up the name
-                if name.startswith("Play "):
-                    game_name = name.replace("Play ", "").split(" |")[0].strip()
-                else:
-                    game_name = name.split(" |")[0].strip()
-
-                if game_name:
-                    xbox_urls.append(("Xbox", game_name, url))
-
-            # Amazon Luna
-            elif "luna.amazon.com/game/" in url:
-                # Clean up the name
-                if name.startswith("Play "):
-                    game_name = name.replace("Play ", "").split(" |")[0].strip()
-                else:
-                    game_name = name.split(" |")[0].strip()
-
-                if game_name:
-                    luna_urls.append(("Amazon Luna", game_name, url))
+    # Scan bookmarks in bookmark_bar, other, and synced folders recursively
+    scan_children(data['roots']['bookmark_bar'].get('children', []))
+    scan_children(data['roots']['other'].get('children', []))
+    scan_children(data['roots']['synced'].get('children', []))
 
     # Merge all platforms' URLs into a single list for processing
     all_urls = geforce_now_urls + xbox_urls + luna_urls
@@ -3450,8 +5449,7 @@ else:
         chromedirectory = os.environ.get("chromedirectory", "/usr/bin/flatpak")
         chrome_startdir = os.environ.get("chrome_startdir", "/usr/bin")
 
-
-        # Replace this with whatever function or method you're using to handle the entries
+        # Replace this with your existing method to handle the entries
         create_new_entry(
             chromedirectory,
             game_name,
@@ -3461,8 +5459,7 @@ else:
         )
         track_game(game_name, "Google Chrome")
 
-#end of chrome scanner for xbox and geforce bookmarks
-
+# end of chrome scanner for xbox, geforce now, and amazon luna bookmarks
 
 
 
@@ -3492,8 +5489,38 @@ else:
         "waydroid.org.lineageos.aperture.desktop",
     }
 
-    exe_path = f'{logged_in_home}/Android_Waydroid/Android_Waydroid_Cage.sh'
-    start_dir = f'{logged_in_home}/Android_Waydroid/'
+    # Possible cage launchers
+    possible_launchers = [
+        f"{logged_in_home}/Android_Waydroid/Android_Waydroid_Cage.sh",
+        f"{logged_in_home}/bin/waydroid-cage.sh",
+        f"{logged_in_home}/.local/bin/waydroid-cage.sh",
+    ]
+
+    launcher_path = next((p for p in possible_launchers if os.path.isfile(p)), None)
+
+    if launcher_path is None:
+        search_dirs = [logged_in_home, "/run/media", "/mnt", "/media"]
+        for base in search_dirs:
+            if not os.path.isdir(base):
+                continue
+            for root, dirs, files in os.walk(base):
+                # Limit recursion to 2 levels deep
+                if root[len(base):].count(os.sep) > 2:
+                    dirs[:] = []
+                    continue
+                if "waydroid-cage.sh" in files:
+                    launcher_path = os.path.join(root, "waydroid-cage.sh")
+                    print(f"Found Waydroid launcher: {launcher_path}")
+                    break
+            if launcher_path:
+                break
+
+    use_cage = bool(launcher_path)
+    exe_path = launcher_path if use_cage else "waydroid"
+    start_dir = os.path.dirname(launcher_path) if use_cage else "./"
+
+    print(f"Waydroid Cage Detected: {use_cage}")
+    print(f"Launcher Path: {exe_path}")
 
     if os.path.isdir(applications_dir):
         for file_name in os.listdir(applications_dir):
@@ -3502,16 +5529,14 @@ else:
 
             file_path = os.path.join(applications_dir, file_name)
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read().lower()
-                    if "waydroid" not in content:
-                        continue
-
-                parser = configparser.ConfigParser(strict=False)
+                parser = configparser.RawConfigParser(strict=False)
                 parser.read(file_path)
 
+                if "Desktop Entry" not in parser:
+                    continue
+
                 display_name = parser.get("Desktop Entry", "Name", fallback=None)
-                exec_cmd = parser.get("Desktop Entry", "Exec", fallback="")
+                exec_cmd = parser.get("Desktop Entry", "Exec", fallback="").lower()
 
                 if not display_name or "waydroid app launch" not in exec_cmd:
                     continue
@@ -3521,11 +5546,20 @@ else:
                 if not app_name:
                     continue
 
+                if use_cage:
+                    target = f'"{exe_path}"'
+                    launch_opts = f'"{app_name}"'
+                    start_in = start_dir
+                else:
+                    target = '"waydroid"'
+                    launch_opts = f'"app" "launch" "{app_name}"'
+                    start_in = start_dir
+
                 create_new_entry(
-                    shortcutdirectory=f'"{exe_path}"',
+                    shortcutdirectory=target,
                     appname=display_name,
-                    launchoptions=f'"{app_name}"',
-                    startingdir=start_dir,
+                    launchoptions=launch_opts,
+                    startingdir=start_in,
                     launcher_name="Waydroid"
                 )
                 track_game(display_name, "Waydroid")
@@ -3534,7 +5568,8 @@ else:
                 print(f"Failed to process {file_name}: {e}")
     else:
         print(f"Applications directory not found: {applications_dir}")
-#end of waydroid scanner
+# End of Waydroid scanner
+
 
 
 
@@ -3549,6 +5584,10 @@ flatpak_apps = [
     {
         "id": "com.moonlight_stream.Moonlight",
         "display_name": "Moonlight Game Streaming"
+    },
+    {
+        "id": "com.hypixel.HytaleLauncher",
+        "display_name": "Hytale"
     }
 ]
 
@@ -3575,9 +5614,11 @@ for app in flatpak_apps:
         print(f"Skipping {display_name} scanner — Flatpak not found or app not installed.")
         continue
 
-    # Custom launch options for Moonlight
+    # Custom launch options for specific apps
     if app_id == "com.moonlight_stream.Moonlight":
         app_launch_options = '"run" "--branch=stable" "--arch=x86_64" "--command=moonlight" "com.moonlight_stream.Moonlight"'
+    elif app_id == "com.hypixel.HytaleLauncher":
+        app_launch_options = '"run" "--branch=master" "--arch=x86_64" "--command=hytale-launcher-wrapper" "com.hypixel.HytaleLauncher"'
     else:
         app_launch_options = f"run {app_id}"
 
@@ -3585,10 +5626,12 @@ for app in flatpak_apps:
         shortcutdirectory=f'"{exe_path}"',
         appname=display_name,
         launchoptions=app_launch_options,
-        startingdir=f'"{start_dir}"'
+        startingdir=f'"{start_dir}"',
+        launcher_name="NonSteamLaunchers"
     )
-
+    track_game(display_name, "Launcher")
 # End of Flatpak Scanner
+
 
 
 
@@ -3834,7 +5877,40 @@ else:
 
 
 
+# Gryphlink Scanner (Endfield)
 
+endfield_exe = (
+    f"{logged_in_home}/.local/share/Steam/steamapps/compatdata/{gryphlink_launcher}/"
+    "pfx/drive_c/Program Files/GRYPHLINK/games/EndField Game/Endfield.exe"
+)
+
+# Check if Endfield exists
+if os.path.exists(endfield_exe):
+    print(f"File exists: {endfield_exe}")
+
+    display_name = "Arknights: Endfield"
+    launch_options = (
+        f"STEAM_COMPAT_DATA_PATH=\"{logged_in_home}/.local/share/Steam/"
+        f"steamapps/compatdata/{gryphlink_launcher}/\" %command%"
+    )
+
+    exe_path = f"\"{endfield_exe}\""
+    start_dir = f"\"{os.path.dirname(endfield_exe)}\""
+
+    create_new_entry(
+        exe_path,
+        display_name,
+        launch_options,
+        start_dir,
+        launcher_name="Gryphlink"
+    )
+
+    track_game(display_name, "Gryphlink")
+
+else:
+    print("Skipping Gryphlink Scanner — Endfield.exe not found")
+
+# End of Gryphlink Game Scanner
 
 
 
@@ -3847,122 +5923,23 @@ skip_games = {'Epic Games', 'GOG Galaxy', 'Ubisoft Connect', 'Battle.net', 'EA A
     'Rockstar Games Launcher', 'Glyph', 'Minecraft Launcher', 'Playstation Plus',
     'VK Play', 'HoYoPlay', 'Nexon Launcher', 'Game Jolt Client', 'Artix Game Launcher',
     'PURPLE Launcher', 'Plarium Play', 'VFUN Launcher', 'Tempo Launcher', 'ARC Launcher',
-    'Pokémon Trading Card Game Live', 'Antstream Arcade', 'STOVE Client', 'Xbox Game Pass',
+    'Pokémon Trading Card Game Live', 'Antstream Arcade', 'STOVE Client', 'Big Fish Games Manager', 'Xbox Game Pass',
     'Better xCloud', 'GeForce Now', 'Boosteroid Cloud Gaming', 'Stim.io', 'WatchParty',
     'Netflix', 'Hulu', 'Tubi', 'Disney+', 'Amazon Prime Video', 'Youtube', 'Youtube TV',
     'Amazon Luna', 'Twitch', 'Venge', 'Rocketcrab', 'Fortnite', 'WebRcade', 'Cloudy Pad',
     'WebRcade Editor', 'Afterplay.io', 'OnePlay', 'AirGPU', 'CloudDeck', 'JioGamesCloud',
-    'Plex', 'Apple TV+', 'Crunchyroll', 'PokéRogue', 'NonSteamLaunchers', 'Repair EA App'}
-
-
-
-
-# --- Game Descriptions Update Logic ---
-def update_game_details(games_to_check, logged_in_home, skip_games):
-    descriptions_file_path = os.path.join(logged_in_home, '.config/systemd/user/descriptions.json')
-
-    def create_descriptions_file():
-        if not os.path.exists(descriptions_file_path):
-            try:
-                with open(descriptions_file_path, 'w') as file:
-                    json.dump([], file, indent=4)
-                print(f"{descriptions_file_path} created successfully.")
-            except IOError as e:
-                print(f"Error creating {descriptions_file_path}: {e}")
-
-    def load_game_data():
-        create_descriptions_file()
-        try:
-            with open(descriptions_file_path, 'r') as file:
-                return json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
-
-    def game_exists_in_data(existing_data, game_name):
-        return any(game['game_name'] == game_name for game in existing_data)
-
-    def get_game_details(game_name):
-        url = f"https://nonsteamlaunchers.onrender.com/api/details/{game_name}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"Error: Unable to retrieve data for {game_name}. Status code {response.status_code}")
-            return None
-
-    def strip_html_tags(text):
-        return re.sub(r'<[^>]*>', '', text)
-
-    def decode_html_entities(text):
-        return text.replace("\u00a0", " ").replace("\u2013", "-").replace("\u2019", "'").replace("\u2122", "™")
-
-    def write_game_details(existing_data, game_details):
-        if not game_details:
-            return existing_data
-
-        if 'about_the_game' in game_details:
-            if game_details['about_the_game'] is not None:
-                game_details['about_the_game'] = strip_html_tags(game_details['about_the_game'])
-                game_details['about_the_game'] = decode_html_entities(game_details['about_the_game'])
-            else:
-                game_details['about_the_game'] = None
-
-        if 'game_details' in game_details:
-            del game_details['game_details']
-
-        if not game_exists_in_data(existing_data, game_details['game_name']):
-            existing_data.append(game_details)
-            print(f"Game details for {game_details['game_name']} added successfully.")
-        else:
-            print(f"Game details for {game_details['game_name']} already exist.")
-
-        return existing_data
-
-    existing_data = load_game_data()
-    changed = False
-
-    for game_name in games_to_check:
-        if game_name.lower() in (label.lower() for label in skip_games):
-            continue
-
-        existing_game = next((game for game in existing_data if game['game_name'] == game_name), None)
-        if existing_game and existing_game.get('about_the_game') is None:
-            continue
-
-        if not game_exists_in_data(existing_data, game_name):
-            game_details = get_game_details(game_name)
-            if game_details:
-                existing_data = write_game_details(existing_data, game_details)
-                changed = True
-            else:
-                existing_data = write_game_details(existing_data, {
-                    "game_name": game_name,
-                    "about_the_game": None
-                })
-                print(f"Inserted placeholder with null for {game_name}")
-                changed = True
-
-    if changed:
-        try:
-            with open(descriptions_file_path, 'w', encoding='utf-8') as file:
-                json.dump(existing_data, file, indent=4, ensure_ascii=False)
-
-            print(f"Updated {descriptions_file_path} with new game details.")
-        except IOError as e:
-            print(f"Error writing to {descriptions_file_path}: {e}")
-    else:
-        print("No new game details added.")
-# --- End of Game Descriptions Update Logic ---
-
+    'Plex', 'Apple TV+', 'Crunchyroll', 'PokéRogue', 'NonSteamLaunchers', 'Repair EA App', 'Gryphlink', 'Super Monkey Ball Online'}
 
 
 # --- Boot Video Logic ---
 def get_boot_video(game_name, logged_in_home):
-    # Dynamically build the list of app names to exclude from API requests
     excluded_apps = skip_games
 
     OVERRIDE_PATH = os.path.expanduser(f'{logged_in_home}/.steam/root/config/uioverrides/movies')
     REQUEST_RETRIES = 5
+    API_URL = "https://steamdeckrepo.com/api/posts/all"
+    DOWNLOAD_BASE = "https://steamdeckrepo.com/post/download"
+    ssl_ctx = ssl.create_default_context()
 
     def sanitize_filename(filename):
         return re.sub(r'[<>:"/\\|?*]', '_', filename)
@@ -3981,43 +5958,49 @@ def get_boot_video(game_name, logged_in_home):
         download_url = video.get('download_url')
         if download_url:
             try:
-                response = requests.get(download_url)
-                if response.status_code == 200:
-                    with open(file_path, 'wb') as f:
-                        f.write(response.content)
-                    print(f"Downloaded {file_path}")
-                else:
-                    print(f"Failed to download {file_path}, status code: {response.status_code}")
-            except requests.exceptions.RequestException as e:
+                with urllib.request.urlopen(download_url, context=ssl_ctx, timeout=60) as response:
+                    if response.status == 200:
+                        with open(file_path, 'wb') as f:
+                            while True:
+                                chunk = response.read(8192)
+                                if not chunk:
+                                    break
+                                f.write(chunk)
+                        print(f"Downloaded {file_path}")
+                    else:
+                        print(f"Failed to download {file_path}, status code: {response.status}")
+            except urllib.error.URLError as e:
                 print(f"Download failed for {file_path}: {e}")
         else:
             print("No download URL found for video.")
 
     try:
-        # Check if the game_name is in the excluded list and skip if so
+        # Skip if game is in excluded list
         if game_name.lower() in [app.lower() for app in excluded_apps]:
             print(f"Skipping boot video for {game_name}, as it's in the excluded apps list.")
-            return  # Skip downloading this video
+            return
 
-        for _ in range(REQUEST_RETRIES):
+        data = []
+        for attempt in range(REQUEST_RETRIES):
             try:
-                response = requests.get('https://steamdeckrepo.com/api/posts/all', verify=certifi.where())
-                if response.status_code == 200:
-                    data = response.json().get('posts', [])
-                    break
-                elif response.status_code == 429:
-                    raise Exception('Rate limit exceeded, try again in a minute')
-                else:
-                    print(f'steamdeckrepo fetch failed, status={response.status_code}')
-            except requests.exceptions.RequestException as e:
+                req = urllib.request.Request(API_URL, headers={"User-Agent": "SteamDeckBootFetcher/1.0"})
+                with urllib.request.urlopen(req, context=ssl_ctx, timeout=20) as response:
+                    if response.status == 200:
+                        data = json.loads(response.read().decode('utf-8')).get('posts', [])
+                        break
+                    elif response.status == 429:
+                        raise Exception('Rate limit exceeded, try again in a minute')
+                    else:
+                        print(f"steamdeckrepo fetch failed, status={response.status}")
+            except urllib.error.URLError as e:
                 print(f"Request failed: {e}")
+            time.sleep(2)  # brief wait before retry
         else:
-            raise Exception(f'Retry attempts exceeded')
+            raise Exception("Retry attempts exceeded")
 
-        # Use the game_name directly instead of splitting it into words
         search_terms = [game_name.lower()]
 
-        # Attempt to find a matching boot video for the full game name
+        # First try full game name
         for term in search_terms:
             filtered_videos = sorted(
                 (
@@ -4025,40 +6008,37 @@ def get_boot_video(game_name, logged_in_home):
                         'id': entry['id'],
                         'name': entry['title'],
                         'preview_video': entry['video'],
-                        'download_url': f'https://steamdeckrepo.com/post/download/{entry["id"]}',
+                        'download_url': f"{DOWNLOAD_BASE}/{entry['id']}",
                         'target': 'boot',
                         'likes': entry['likes'],
                     }
                     for entry in data
-                    if term in entry['title'].lower() and
-                    entry['type'] == 'boot_video'
+                    if term in entry['title'].lower() and entry['type'] == 'boot_video'
                 ),
                 key=lambda x: x['likes'], reverse=True
             )
 
             if filtered_videos:
                 video = filtered_videos[0]
-                print(f"🎬 Downloading boot video: {video['name']}")
+                print(f"Downloading boot video: {video['name']}")
                 download_video(video, OVERRIDE_PATH)
-                return  # Exit after downloading the first matching video
+                return
 
-        # If no video was found, check if the game_name has more than one word and use the first two words
+        # If no video, try first two words of game name
         if len(game_name.split()) > 1:
             first_two_words = ' '.join(game_name.split()[:2]).lower()
-
             filtered_videos = sorted(
                 (
                     {
                         'id': entry['id'],
                         'name': entry['title'],
                         'preview_video': entry['video'],
-                        'download_url': f'https://steamdeckrepo.com/post/download/{entry["id"]}',
+                        'download_url': f"{DOWNLOAD_BASE}/{entry['id']}",
                         'target': 'boot',
                         'likes': entry['likes'],
                     }
                     for entry in data
-                    if first_two_words in entry['title'].lower() and
-                    entry['type'] == 'boot_video'
+                    if first_two_words in entry['title'].lower() and entry['type'] == 'boot_video'
                 ),
                 key=lambda x: x['likes'], reverse=True
             )
@@ -4066,15 +6046,14 @@ def get_boot_video(game_name, logged_in_home):
             if filtered_videos:
                 video = filtered_videos[0]
                 download_video(video, OVERRIDE_PATH)
-                return  # Exit after downloading the first matching video
+                return
 
-        # If no video was found at all
+        # No video found
         print(f"No top boot video found for {game_name}.")
 
     except Exception as e:
         print(f"Failed to fetch steamdeckrepo: {e}")
 # --- End of Boot Video Logic ---
-
 
 # --- Main block (MUST remain untouched) ---
 if new_shortcuts_added or shortcuts_updated:
@@ -4090,8 +6069,6 @@ if new_shortcuts_added or shortcuts_updated:
             if name.lower() not in [app.lower() for app in skip_games]:
                 print(f"Fetching boot video for: {name}")
                 get_boot_video(name, logged_in_home)
-
-            update_game_details([name], logged_in_home, skip_games)
 
         for name in created_shortcuts:
             if name in notified_games:
@@ -4118,20 +6095,60 @@ else:
 
 # Notify about removed games (if any)
 if removed_apps:
-    removed_game_names = []
-    for launcher, apps in removed_apps.items():
-        removed_game_names.extend([f"{app} ({launcher})" for app in apps])
-
+    removed_game_names = [f"{app} ({launcher})" for launcher, apps in removed_apps.items() for app in apps]
     removed_message = "Removed from library:\n" + "\n".join(removed_game_names)
 
+    ws_socket = None
     try:
-        # Only connect & inject JS if a game was actually removed
         ws_url = get_ws_url_by_title(WS_HOST, WS_PORT, TARGET_TITLE)
+        print(f"Connecting to WebSocket URL: {ws_url}")
         ws_socket = create_websocket_connection(ws_url)
+
+        # Inject JS once
         inject_js_only(ws_socket)
 
-        send_steam_notification(ws_socket, removed_message)
+        # Send notification and remove empty collections
+        result = send_launcher_notification(ws_socket, removed_message, removed_apps)
+
     except Exception as e:
-        print("Failed to send removal notification:", e)
+        print(f"Failed to send removal notification or cleanup collections: {e}")
+
     finally:
-        ws_socket.close()
+        if ws_socket:
+            ws_socket.close()
+
+    directories = [
+        os.path.join(logged_in_home, 'Desktop'),
+        os.path.join(logged_in_home, '.local', 'share', 'applications')
+    ]
+
+    for game_name in removed_game_names:
+        base_game_name = game_name.split(' (')[0].strip().lower()
+        desktop_filename = f"{base_game_name}.desktop"
+
+        found_file = False
+
+        print(f"Looking for .desktop file for: {game_name}")
+
+        for directory in directories:
+            try:
+                files_in_directory = os.listdir(directory)
+            except Exception as e:
+                continue
+
+            for f in files_in_directory:
+                if f.lower() == desktop_filename:
+                    full_path = os.path.join(directory, f)
+                    try:
+                        os.remove(full_path)
+                        print(f"Deleted .desktop file for: {game_name} from {directory}")
+                    except Exception as e:
+                        print(f"Failed to delete {full_path} due to: {e}")
+                        continue
+                    found_file = True
+
+
+        if not found_file:
+            print(f"No .desktop file found for: {game_name}")
+
+

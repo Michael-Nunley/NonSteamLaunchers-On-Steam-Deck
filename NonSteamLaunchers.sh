@@ -41,7 +41,7 @@ compatdata_dir="${logged_in_home}/.local/share/Steam/steamapps/compatdata"
 non_steam_launchers_dir="${compatdata_dir}/NonSteamLaunchers/pfx/drive_c/"
 
 # Define an array of folder names
-folder_names=("NonSteamLaunchers" "EpicGamesLauncher" "GogGalaxyLauncher" "UplayLauncher" "Battle.netLauncher" "TheEAappLauncher" "AmazonGamesLauncher" "itchioLauncher" "LegacyGamesLauncher" "HumbleGamesLauncher" "IndieGalaLauncher" "RockstarGamesLauncher" "GlyphLauncher" "PlaystationPlusLauncher" "VKPlayLauncher" "HoYoPlayLauncher" "NexonLauncher" "GameJoltLauncher" "ArtixGameLauncher" "ARCLauncher" "PokeTCGLauncher" "AntstreamLauncher" "PURPLELauncher" "PlariumLauncher" "VFUNLauncher" "TempoLauncher")
+folder_names=("NonSteamLaunchers" "EpicGamesLauncher" "GogGalaxyLauncher" "UplayLauncher" "Battle.netLauncher" "TheEAappLauncher" "AmazonGamesLauncher" "itchioLauncher" "LegacyGamesLauncher" "HumbleGamesLauncher" "IndieGalaLauncher" "RockstarGamesLauncher" "GlyphLauncher" "PlaystationPlusLauncher" "VKPlayLauncher" "HoYoPlayLauncher" "NexonLauncher" "GameJoltLauncher" "ArtixGameLauncher" "ARCLauncher" "PokeTCGLauncher" "AntstreamLauncher" "PURPLELauncher" "PlariumLauncher" "VFUNLauncher" "TempoLauncher" "BigFishLauncher" "GryphlinkLauncher")
 
 # Cleaning up empty directories in compatdata (maxdepth 1 to avoid subdirectories)
 echo "Cleaning up empty directories in $compatdata_dir..."
@@ -93,7 +93,7 @@ fi
 exec > >(tee -a "$log_file") 2>&1
 
 # Version number (major.minor)
-version=v4.2.4
+version=v4.2.89
 #NSL Decky Plugin Latest Github Version
 deckyversion=$(curl -s https://raw.githubusercontent.com/moraroy/NonSteamLaunchersDecky/refs/heads/main/package.json | grep -o '"version": "[^"]*' | sed 's/"version": "//')
 
@@ -200,50 +200,11 @@ fi
 # Get the command line arguments
 args=("$@")
 echo "Arguments passed: ${args[@]}"  # Debugging the passed arguments
-deckyplugin=false
-installchrome=false
-
-for arg in "${args[@]}"; do
-  if [ "$arg" = "DeckyPlugin" ]; then
-    deckyplugin=true
-  elif [ "$arg" = "Chrome" ]; then
-    installchrome=true
-  fi
-done
-
-# Check if the user wants to install Chrome
-if $installchrome; then
-  # Check if Google Chrome is already installed for the current user
-  if flatpak list --user | grep com.google.Chrome &> /dev/null; then
-    echo "Google Chrome is already installed for the current user"
-    flatpak --user override --filesystem=/run/udev:ro com.google.Chrome
-  else
-    # Check if the Flathub repository exists for the current user
-    if flatpak remote-list --user | grep flathub &> /dev/null; then
-      echo "Flathub repository exists for the current user"
-    else
-      # Add the Flathub repository for the current user
-      flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    fi
-
-    # Install Google Chrome for the current user
-    flatpak install --user flathub com.google.Chrome -y
-
-    # Run the flatpak --user override command
-    flatpak --user override --filesystem=/run/udev:ro com.google.Chrome
-  fi
-fi
 
 
 
 
-
-
-
-# --------------------------
 # First Run: VARIABLE SETUP
-# --------------------------
-
 # Function to extract steamid3 from Steam config
 get_steam_user_info() {
     if [[ -f "${logged_in_home}/.steam/root/config/loginusers.vdf" ]] || [[ -f "${logged_in_home}/.local/share/Steam/config/loginusers.vdf" ]]; then
@@ -259,7 +220,7 @@ get_steam_user_info() {
         current_user=""
         current_steamid=""
 
-        while IFS="," read steamid account timestamp; do
+        while IFS="," read -r steamid account timestamp; do
             if (( timestamp > max_timestamp )); then
                 max_timestamp=$timestamp
                 current_user=$account
@@ -268,15 +229,9 @@ get_steam_user_info() {
         done < <(echo "$most_recent_user" | awk -v RS='}\n' -F'\n' '
         {
             for(i=1;i<=NF;i++){
-                if($i ~ /[0-9]{17}/){
-                    split($i,a, "\""); steamid=a[2];
-                }
-                if($i ~ /"AccountName"/){
-                    split($i,b, "\""); account=b[4];
-                }
-                if($i ~ /"Timestamp"/){
-                    split($i,c, "\""); timestamp=c[4];
-                }
+                if($i ~ /[0-9]{17}/){ split($i,a, "\""); steamid=a[2]; }
+                if($i ~ /"AccountName"/){ split($i,b, "\""); account=b[4]; }
+                if($i ~ /"Timestamp"/){ split($i,c, "\""); timestamp=c[4]; }
             }
             print steamid "," account "," timestamp
         }')
@@ -284,7 +239,7 @@ get_steam_user_info() {
         steamid3=$((current_steamid - 76561197960265728))
         echo "$steamid3"
     else
-        return 0  # Graceful return if file not found
+        return 0
     fi
 }
 
@@ -304,18 +259,14 @@ else
 fi
 
 # Get Python version
-python_version=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
-
-# Just check if Chrome is installed via Flatpak — don't use its path
-if flatpak list --app | grep -q com.google.Chrome; then
-    echo "Google Chrome is installed via Flatpak."
-else
-    echo "Google Chrome is not installed via Flatpak."
-fi
+python_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
 
 # Always assign these for Steam shortcut compatibility
 chromedirectory="/usr/bin/flatpak"
 chrome_startdir="/usr/bin"
+
+# Optional extra variables
+separate_appids=false
 
 # Write to env_vars
 env_file="${logged_in_home}/.config/systemd/user/env_vars"
@@ -323,27 +274,43 @@ mkdir -p "$(dirname "$env_file")"
 
 # Declare vars to check and write
 declare -A vars_to_set
-[[ -n "$steamid3" ]] && vars_to_set["steamid3"]="$steamid3"
-vars_to_set["logged_in_home"]="$logged_in_home"
-vars_to_set["compat_tool_name"]="$compat_tool_name"
-[[ -n "$python_version" ]] && vars_to_set["python_version"]="$python_version"
-vars_to_set["chromedirectory"]="$chromedirectory"
-vars_to_set["chrome_startdir"]="$chrome_startdir"
+vars_to_set["separate_appids"]=$separate_appids
+[[ -n "$steamid3" ]] && vars_to_set["steamid3"]=$steamid3
+vars_to_set["logged_in_home"]=$logged_in_home
+vars_to_set["compat_tool_name"]=$compat_tool_name
+[[ -n "$python_version" ]] && vars_to_set["python_version"]=$python_version
+vars_to_set["chromedirectory"]=$chromedirectory
+vars_to_set["chrome_startdir"]=$chrome_startdir
+
+# Variables that should be quoted
+declare -A quote_vars
+quote_vars["chromedirectory"]=1
+quote_vars["chrome_startdir"]=1
 
 # If file is missing or empty, write everything at once
 if [[ ! -s "$env_file" ]]; then
     {
         for key in "${!vars_to_set[@]}"; do
-            echo "export $key=\"${vars_to_set[$key]}\""
+            value="${vars_to_set[$key]}"
+            if [[ -n "${quote_vars[$key]:-}" ]]; then
+                echo "export $key=\"$value\""
+            else
+                echo "export $key=$value"
+            fi
         done
     } > "$env_file"
-    echo "Environment variables written to $env_file (new or empty file)."
+    echo "Environment variables written to $env_file (new file)."
 else
-    # File exists with content: append only missing exports
+    # Append only missing variables
     for key in "${!vars_to_set[@]}"; do
         if ! grep -qE "^export $key=" "$env_file"; then
-            echo "export $key=\"${vars_to_set[$key]}\"" >> "$env_file"
-            echo "Added: export $key=\"${vars_to_set[$key]}\""
+            value="${vars_to_set[$key]}"
+            if [[ -n "${quote_vars[$key]:-}" ]]; then
+                echo "export $key=\"$value\"" >> "$env_file"
+            else
+                echo "export $key=$value" >> "$env_file"
+            fi
+            echo "Added: export $key=$value"
         fi
     done
     echo "Environment variables updated in $env_file (if needed)."
@@ -351,207 +318,134 @@ fi
 #End of First Run Env_vars
 
 
+### NSL Game Scanner.py Update/Scan
+update_nsl_game_scanner() {
+    repo_url='https://github.com/moraroy/NonSteamLaunchers-On-Steam-Deck/archive/refs/heads/main.zip'
+    folders_to_clone=('urllib3' 'vdf' 'charset_normalizer')
+
+    parent_folder="${logged_in_home}/.config/systemd/user/Modules"
+    python_script_path="${logged_in_home}/.config/systemd/user/NSLGameScanner.py"
+    github_link="https://raw.githubusercontent.com/moraroy/NonSteamLaunchers-On-Steam-Deck/main/NSLGameScanner.py"
+    env_vars="${logged_in_home}/.config/systemd/user/env_vars"
+    steam_debug_file="${logged_in_home}/.local/share/Steam/.cef-enable-remote-debugging"
+    nsl_config_dir="${logged_in_home}/.var/app/com.github.mtkennerly.ludusavi/config/ludusavi/NSLconfig"
+
+    # Stop and disable the service if it exists
+    if systemctl --user list-unit-files | grep -q "nslgamescanner.service"; then
+        if systemctl --user is-active --quiet nslgamescanner.service; then
+            systemctl --user stop nslgamescanner.service
+        fi
+
+        systemctl --user disable nslgamescanner.service 2>/dev/null || true
+    fi
+
+    # Remove the old python script if it exists
+    rm -f "$python_script_path"
+
+    # Create the parent folder if it doesn't exist
+    mkdir -p "${parent_folder}"
+
+    folders_exist=true
+    for folder in "${folders_to_clone[@]}"; do
+        if [ ! -d "${parent_folder}/${folder}" ]; then
+            folders_exist=false
+            break
+        fi
+    done
+
+    # Download and unzip the repo if necessary
+    if [ "${folders_exist}" = false ]; then
+        zip_file_path="${parent_folder}/repo.zip"
+
+        wget -O "${zip_file_path}" "${repo_url}" || { echo 'Download failed'; exit 1; }
+
+        unzip -d "${parent_folder}" "${zip_file_path}" || { echo 'Unzip failed'; exit 1; }
+
+        for folder in "${folders_to_clone[@]}"; do
+            destination_path="${parent_folder}/${folder}"
+            source_path="${parent_folder}/NonSteamLaunchers-On-Steam-Deck-main/Modules/${folder}"
+            if [ -d "${source_path}" ]; then
+                mv "${source_path}" "${destination_path}" || { echo "Move failed for ${folder}"; exit 1; }
+            fi
+        done
+
+        rm -f "${zip_file_path}"
+        rm -rf "${parent_folder}/NonSteamLaunchers-On-Steam-Deck-main"
+    fi
+
+    # Download the latest Python script
+    curl -fsSL -o "$python_script_path" "$github_link"
+    chmod +x "$python_script_path"
+}
+
+update_nsl_game_scanner
 
 
-if [ "${deckyplugin}" = false ]; then
-	# Download Modules
-	repo_url='https://github.com/moraroy/NonSteamLaunchers-On-Steam-Deck/archive/refs/heads/main.zip'
-	folders_to_clone=('requests' 'urllib3' 'steamgrid' 'vdf' 'charset_normalizer')
 
-	logged_in_home=$(eval echo ~$user)
-	parent_folder="${logged_in_home}/.config/systemd/user/Modules"
-	mkdir -p "${parent_folder}"
+funny_messages=(
+  "Wow, you have a lot of games!"
+  "Getting artwork and descriptions for note system..."
+  "So many launchers, so little time..."
+  "Much game. Very library. Wow."
+  "Looking under the Steam Deck couch cushions..."
+  "Injecting metadata directly into your eyeballs..."
+  "Downloading more RAM... just kidding."
+  "Scanning your games like a barcode at checkout!"
+  "Adding +10 charm to your launcher list..."
+  "Man this is taking a long time..."
+  "Removing NSL from Decky Loader Store... jk that happened in real life."
+  "Learning your game choices and judging you for them..."
+  "But why is that game in here!!??"
+  "Downloading any boot videos for your enjoyment..."
+  "Thank you for being patient..."
+  "This may take a while..."
+  "You may need to grab a coffee..."
+  "If you see this notification, I'm still working don't worry..."
+  "Getting Descriptions, Artwork and Boot Videos if applicable..."
+)
 
-	folders_exist=true
-	for folder in "${folders_to_clone[@]}"; do
-	  if [ ! -d "${parent_folder}/${folder}" ]; then
-	    folders_exist=false
-	    break
-	  fi
-	done
+(
+  while true; do
+    sleep 2
+    loop_msg="${funny_messages[$RANDOM % ${#funny_messages[@]}]}"
+    show_message "Still scanning... ${loop_msg}"
+    sleep 15
+  done
+) &
+message_pid=$!
+python3 "$python_script_path"
 
-	if [ "${folders_exist}" = false ]; then
-	  zip_file_path="${parent_folder}/repo.zip"
-	  wget -O "${zip_file_path}" "${repo_url}" || { echo 'Download failed with error code: $?'; exit 1; }
-	  unzip -d "${parent_folder}" "${zip_file_path}" || { echo 'Unzip failed with error code: $?'; exit 1; }
+kill $message_pid 2>/dev/null
+show_message "Scanning complete! Your game library looks good!"
 
-	  for folder in "${folders_to_clone[@]}"; do
-	    destination_path="${parent_folder}/${folder}"
-	    source_path="${parent_folder}/NonSteamLaunchers-On-Steam-Deck-main/Modules/${folder}"
-	    if [ ! -d "${destination_path}" ]; then
-	      mv "${source_path}" "${destination_path}" || { echo 'Move failed with error code: $?'; exit 1; }
-	    fi
-	  done
+if [ ! -f "$steam_debug_file" ]; then
+    touch "$steam_debug_file" || { echo "Failed to create $steam_debug_file"; exit 1; }
 
-	  rm "${zip_file_path}"
-	  rm -r "${parent_folder}/NonSteamLaunchers-On-Steam-Deck-main"
-	fi
-
-	# Service File rough update
-	rm -rf ${logged_in_home}/.config/systemd/user/NSLGameScanner.py
-	rm -rf ${logged_in_home}/.config/systemd/user/nslgamescanner.service
-	unlink ${logged_in_home}/.config/systemd/user/default.target.wants/nslgamescanner.service
-	systemctl --user daemon-reload
-    systemctl --user reset-failed
-
-	python_script_path="${logged_in_home}/.config/systemd/user/NSLGameScanner.py"
-	github_link="https://raw.githubusercontent.com/moraroy/NonSteamLaunchers-On-Steam-Deck/main/NSLGameScanner.py"
-	curl -o $python_script_path $github_link
-
-	env_vars="${logged_in_home}/.config/systemd/user/env_vars"
-
-	if [ -f "$env_vars" ]; then
-	    echo "env_vars file found. Running the .py file."
-	    live="and is LIVE. Latest NSL Decky Plugin Version on Github: $deckyversion"
-	else
-	    echo "env_vars file not found. Not Running the .py file."
-	    live="and is not LIVE. Latest NSL Decky Plugin Version on Github: $deckyversion"
-	fi
-
-	decky_plugin=false
-	for arg in "${args[@]}"; do
-	  if [ "$arg" = "Decky Plugin" ]; then
-	    decky_plugin=true
-	    break
-	  fi
-	done
-
-	funny_messages=(
-	  "Wow, you have a lot of games!"
-	  "Getting artwork and descriptions for note system..."
-	  "So many launchers, so little time..."
-	  "Much game. Very library. Wow."
-	  "Looking under the Steam Deck couch cushions..."
-	  "Injecting metadata directly into your eyeballs..."
-	  "Downloading more RAM... just kidding."
-	  "Scanning your games like a barcode at checkout!"
-	  "Adding +10 charm to your launcher list..."
-	  "Man this is taking a long time..."
-	  "Removing NSL from Decky Loader Store... jk that happend in real life."
-	  "Learning your game choices and judging you for them..."
-	  "But why is that game in here!!??"
-	  "Downloading any boot videos for your enjoyment..."
-	  "Thank you for being patient..."
-	  "This may take a while..."
-	  "You may need to grab a coffee..."
-	  "If you see this notification, I'm still working dont worry..."
-	  "Getting Descriptions, Artwork and Boot Videos if applicable..."
-	)
-
-	if [ "$decky_plugin" = true ]; then
-	    if [ -f "$env_vars" ]; then
-	        echo "Decky Plugin argument set and env_vars file found. Running the .py file..."
-
-	        start_msg="${funny_messages[$RANDOM % ${#funny_messages[@]}]}"
-	        show_message "Starting Scanner... looking for any games..."
-
-	        (
-	          while true; do
-	            sleep 15
-	            loop_msg="${funny_messages[$RANDOM % ${#funny_messages[@]}]}"
-	            show_message "Still scanning... ${loop_msg}"
-	          done
-	        ) &
-	        message_pid=$!
-
-	        # Check Steam debug file before running Python
-	        steam_debug_file="${logged_in_home}/.local/share/Steam/.cef-enable-remote-debugging"
-	        if [ ! -f "$steam_debug_file" ]; then
-	            echo "Creating missing Steam remote debugging file: $steam_debug_file"
-	            touch "$steam_debug_file" || { echo "Failed to create file: $steam_debug_file"; exit 1; }
-
-	            steam_pid() { pgrep -x steam; }
-	            echo "File created successfully. Restarting Steam..."
-	            steam_running=$(steam_pid)
-	            if [[ -n "$steam_running" ]]; then
-	                echo "Closing Steam..."
-	                killall steam
-	            fi
-
-	            while steam_pid > /dev/null; do sleep 1; done
-
-	            echo "Relaunching Steam..."
-	            nohup /usr/bin/steam -silent %U &>/dev/null &
-	        else
-	            echo "Steam remote debugging file already exists: $steam_debug_file"
-	        fi
-
-	        python3 $python_script_path
-
-	        kill $message_pid
-	        show_message "Scanning complete! Your game library looks good!"
-
-	        echo "Python script ran. Continuing with the script..."
-	    else
-	        echo "Decky Plugin argument set but env_vars file not found. Exiting the script."
-	        exit 0
-	    fi
-	else
-	    echo "Decky Plugin argument not set. Continuing with the script..."
-
-	    start_msg="${funny_messages[$RANDOM % ${#funny_messages[@]}]}"
-	    show_message "Starting Scanner... looking for any games..."
-
-	    (
-	      while true; do
-	        sleep 15
-	        loop_msg="${funny_messages[$RANDOM % ${#funny_messages[@]}]}"
-	        show_message "Still scanning... ${loop_msg}"
-	      done
-	    ) &
-	    message_pid=$!
-
-	    # Check Steam debug file before running Python
-	    steam_debug_file="${logged_in_home}/.local/share/Steam/.cef-enable-remote-debugging"
-	    if [ ! -f "$steam_debug_file" ]; then
-	        echo "Creating missing Steam remote debugging file: $steam_debug_file"
-	        touch "$steam_debug_file" || { echo "Failed to create file: $steam_debug_file"; exit 1; }
-
-	        steam_pid() { pgrep -x steam; }
-	        echo "File created successfully. Restarting Steam..."
-	        steam_running=$(steam_pid)
-	        if [[ -n "$steam_running" ]]; then
-	            echo "Closing Steam..."
-	            killall steam
-	        fi
-
-	        while steam_pid > /dev/null; do sleep 1; done
-
-	        echo "Relaunching Steam..."
-	        nohup /usr/bin/steam -silent %U &>/dev/null &
-	    else
-	        echo "Steam remote debugging file already exists: $steam_debug_file"
-	    fi
-
-	    python3 $python_script_path
-
-	    kill $message_pid
-        show_message "Scanning complete! Your game library looks good!"
-	    sleep 2
-
-	    echo "env_vars file found. Running the .py file."
-	    live="successfully. Decky Plugin Version on Github is: $deckyversion"
-	fi
-
-	nsl_config_dir="${logged_in_home}/.var/app/com.github.mtkennerly.ludusavi/config/ludusavi/NSLconfig"
-
-	if [ -d "$nsl_config_dir" ]; then
-	    if flatpak list --app | grep -q "com.github.mtkennerly.ludusavi"; then
-	        echo "Running backup..."
-	        nohup flatpak run com.github.mtkennerly.ludusavi --config "$nsl_config_dir" backup --force > /dev/null 2>&1 &
-	        wait $!
-	        echo "Backup completed"
-	        show_message "Game Saves have been backed up! Please check here: /home/deck/NSLGameSaves"
-	        sleep 2
-	    else
-	        echo "Flatpak com.github.mtkennerly.ludusavi not found. Skipping backup."
-	    fi
-	else
-	    echo "Config directory $nsl_config_dir does not exist. Skipping backup."
-	fi
+    echo "Restarting Steam..."
+    killall steam 2>/dev/null || true
+    while pgrep -x steam >/dev/null; do sleep 1; done
+    nohup /usr/bin/steam -silent %U &>/dev/null &
 fi
-sleep 1
+
+if systemctl --user list-unit-files | grep -q "nslgamescanner.service"; then
+    echo "[NSL] Starting NSL Game Scanner service..."
+    systemctl --user start nslgamescanner.service
+else
+    echo "[NSL] Service file not found — skipping start."
+fi
+
+if [ -d "$nsl_config_dir" ] && flatpak list --app | grep -q "com.github.mtkennerly.ludusavi"; then
+    nohup flatpak run com.github.mtkennerly.ludusavi --config "$nsl_config_dir" backup --force > /dev/null 2>&1 &
+    wait $!
+    show_message "Game Saves have been backed up! Please check here: /home/deck/NSLGameSaves"
+    sleep 3
+fi
+
 show_message "Finished! Welcome to NonSteamLaunchers!"
+sleep 3
+###End of NSL Game Scanner update
+
+
 
 
 # Check if any command line arguments were provided
@@ -573,8 +467,8 @@ fi
 
 # TODO: parameterize hard-coded client versions (cf. 'app-26.1.9')
 # Set the paths to the launcher executables
-epic_games_launcher_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries/Win32/EpicGamesLauncher.exe"
-epic_games_launcher_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries/Win32/EpicGamesLauncher.exe"
+epic_games_launcher_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+epic_games_launcher_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
 gog_galaxy_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/GOG Galaxy/GalaxyClient.exe"
 gog_galaxy_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GogGalaxyLauncher/pfx/drive_c/Program Files (x86)/GOG Galaxy/GalaxyClient.exe"
 uplay_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/upc.exe"
@@ -585,8 +479,10 @@ eaapp_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamL
 eaapp_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/TheEAappLauncher/pfx/drive_c/Program Files/Electronic Arts/EA Desktop/EA Desktop/EADesktop.exe"
 amazongames_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/users/steamuser/AppData/Local/Amazon Games/App/Amazon Games.exe"
 amazongames_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/AmazonGamesLauncher/pfx/drive_c/users/steamuser/AppData/Local/Amazon Games/App/Amazon Games.exe"
-itchio_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/users/steamuser/AppData/Local/itch/app-26.1.9/itch.exe"
-itchio_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/itchioLauncher/pfx/drive_c/users/steamuser/AppData/Local/itch/app-26.1.9/itch.exe"
+
+itchio_path1=$(ls -d "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/users/steamuser/AppData/Local/itch/app-"*/itch.exe | sort -V | tail -n 1)
+itchio_path2=$(ls -d "${logged_in_home}/.local/share/Steam/steamapps/compatdata/itchioLauncher/pfx/drive_c/users/steamuser/AppData/Local/itch/app-"*/itch.exe | sort -V | tail -n 1)
+
 legacygames_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files/Legacy Games/Legacy Games Launcher/Legacy Games Launcher.exe"
 legacygames_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/LegacyGamesLauncher/pfx/drive_c/Program Files/Legacy Games/Legacy Games Launcher/Legacy Games Launcher.exe"
 humblegames_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files/Humble App/Humble App.exe"
@@ -629,7 +525,10 @@ tempo_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/TempoLaun
 stove_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/ProgramData/Smilegate/STOVE/STOVE.exe"
 stove_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/STOVELauncher/pfx/drive_c/ProgramData/Smilegate/STOVE/STOVE.exe"
 
-
+bigfish_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/bfgclient/bfgclient.exe"
+bigfish_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/BigFishLauncher/pfx/drive_c/Program Files (x86)/bfgclient/bfgclient.exe"
+gryphlink_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files/GRYPHLINK/Launcher.exe"
+gryphlink_path2="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GryphlinkLauncher/pfx/drive_c/Program Files/GRYPHLINK/Launcher.exe"
 
 
 
@@ -642,11 +541,11 @@ chromedirectory="\"$chrome_path\""
 #Zenity Launcher Check Installation
 function CheckInstallations {
     declare -A paths1 paths2 names
-    paths1=(["epic_games"]="$epic_games_launcher_path1" ["gog_galaxy"]="$gog_galaxy_path1" ["uplay"]="$uplay_path1" ["battlenet"]="$battlenet_path1" ["eaapp"]="$eaapp_path1" ["amazongames"]="$amazongames_path1" ["itchio"]="$itchio_path1" ["legacygames"]="$legacygames_path1" ["humblegames"]="$humblegames_path1" ["indiegala"]="$indiegala_path1" ["rockstar"]="$rockstar_path1" ["glyph"]="$glyph_path1" ["minecraft"]="$minecraft_path1" ["psplus"]="$psplus_path1" ["vkplay"]="$vkplay_path1" ["hoyoplay"]="$hoyoplay_path1" ["nexon"]="$nexon_path1" ["gamejolt"]="$gamejolt_path1" ["artixgame"]="$artixgame_path1" ["arc"]="$arc_path1" ["poketcg"]="$poketcg_path1" ["antstream"]="$antstream_path1" ["purple"]="$purple_path1" ["plarium"]="$plarium_path1" ["vfun"]="$vfun_path1" ["tempo"]="$tempo_path1" ["stove"]="$stove_path1")
+    paths1=(["epic_games"]="$epic_games_launcher_path1" ["gog_galaxy"]="$gog_galaxy_path1" ["uplay"]="$uplay_path1" ["battlenet"]="$battlenet_path1" ["eaapp"]="$eaapp_path1" ["amazongames"]="$amazongames_path1" ["itchio"]="$itchio_path1" ["legacygames"]="$legacygames_path1" ["humblegames"]="$humblegames_path1" ["indiegala"]="$indiegala_path1" ["rockstar"]="$rockstar_path1" ["glyph"]="$glyph_path1" ["minecraft"]="$minecraft_path1" ["psplus"]="$psplus_path1" ["vkplay"]="$vkplay_path1" ["hoyoplay"]="$hoyoplay_path1" ["nexon"]="$nexon_path1" ["gamejolt"]="$gamejolt_path1" ["artixgame"]="$artixgame_path1" ["arc"]="$arc_path1" ["poketcg"]="$poketcg_path1" ["antstream"]="$antstream_path1" ["purple"]="$purple_path1" ["plarium"]="$plarium_path1" ["vfun"]="$vfun_path1" ["tempo"]="$tempo_path1" ["stove"]="$stove_path1" ["bigfish"]="$bigfish_path1" ["gryphlink"]="$gryphlink_path1")
 
-    paths2=(["epic_games"]="$epic_games_launcher_path2" ["gog_galaxy"]="$gog_galaxy_path2" ["uplay"]="$uplay_path2" ["battlenet"]="$battlenet_path2" ["eaapp"]="$eaapp_path2" ["amazongames"]="$amazongames_path2" ["itchio"]="$itchio_path2" ["legacygames"]="$legacygames_path2" ["humblegames"]="$humblegames_path2" ["indiegala"]="$indiegala_path2" ["rockstar"]="$rockstar_path2" ["glyph"]="$glyph_path2" ["minecraft"]="$minecraft_path2" ["psplus"]="$psplus_path2" ["vkplay"]="$vkplay_path2" ["hoyoplay"]="$hoyoplay_path2" ["nexon"]="$nexon_path2" ["gamejolt"]="$gamejolt_path2" ["artixgame"]="$artixgame_path2" ["arc"]="$arc_path2" ["poketcg"]="$poketcg_path2" ["antstream"]="$antstream_path2" ["purple"]="$purple_path2" ["plarium"]="$plarium_path2" ["vfun"]="$vfun_path2" ["tempo"]="$tempo_path2" ["stove"]="$stove_path2")
+    paths2=(["epic_games"]="$epic_games_launcher_path2" ["gog_galaxy"]="$gog_galaxy_path2" ["uplay"]="$uplay_path2" ["battlenet"]="$battlenet_path2" ["eaapp"]="$eaapp_path2" ["amazongames"]="$amazongames_path2" ["itchio"]="$itchio_path2" ["legacygames"]="$legacygames_path2" ["humblegames"]="$humblegames_path2" ["indiegala"]="$indiegala_path2" ["rockstar"]="$rockstar_path2" ["glyph"]="$glyph_path2" ["minecraft"]="$minecraft_path2" ["psplus"]="$psplus_path2" ["vkplay"]="$vkplay_path2" ["hoyoplay"]="$hoyoplay_path2" ["nexon"]="$nexon_path2" ["gamejolt"]="$gamejolt_path2" ["artixgame"]="$artixgame_path2" ["arc"]="$arc_path2" ["poketcg"]="$poketcg_path2" ["antstream"]="$antstream_path2" ["purple"]="$purple_path2" ["plarium"]="$plarium_path2" ["vfun"]="$vfun_path2" ["tempo"]="$tempo_path2" ["stove"]="$stove_path2" ["bigfish"]="$bigfish_path2" ["gryphlink"]="$gryphlink_path1")
 
-    names=(["epic_games"]="Epic Games" ["gog_galaxy"]="GOG Galaxy" ["uplay"]="Ubisoft Connect" ["battlenet"]="Battle.net" ["eaapp"]="EA App" ["amazongames"]="Amazon Games" ["itchio"]="itch.io" ["legacygames"]="Legacy Games" ["humblegames"]="Humble Games Collection" ["indiegala"]="IndieGala" ["rockstar"]="Rockstar Games Launcher" ["glyph"]="Glyph Launcher" ["minecraft"]="Minecraft Launcher" ["psplus"]="Playstation Plus" ["vkplay"]="VK Play" ["hoyoplay"]="HoYoPlay" ["nexon"]="Nexon Launcher" ["gamejolt"]="Game Jolt Client" ["artixgame"]="Artix Game Launcher" ["arc"]="ARC Launcher" ["poketcg"]="Pokémon Trading Card Game Live" ["antstream"]="Antstream Arcade" ["purple"]="PURPLE Launcher" ["plarium"]="Plarium Play" ["vfun"]="VFUN Launcher" ["tempo"]="Tempo Launcher" ["stove"]="STOVE Client")
+    names=(["epic_games"]="Epic Games" ["gog_galaxy"]="GOG Galaxy" ["uplay"]="Ubisoft Connect" ["battlenet"]="Battle.net" ["eaapp"]="EA App" ["amazongames"]="Amazon Games" ["itchio"]="itch.io" ["legacygames"]="Legacy Games" ["humblegames"]="Humble Games Collection" ["indiegala"]="IndieGala" ["rockstar"]="Rockstar Games Launcher" ["glyph"]="Glyph Launcher" ["minecraft"]="Minecraft Launcher" ["psplus"]="Playstation Plus" ["vkplay"]="VK Play" ["hoyoplay"]="HoYoPlay" ["nexon"]="Nexon Launcher" ["gamejolt"]="Game Jolt Client" ["artixgame"]="Artix Game Launcher" ["arc"]="ARC Launcher" ["poketcg"]="Pokémon Trading Card Game Live" ["antstream"]="Antstream Arcade" ["purple"]="PURPLE Launcher" ["plarium"]="Plarium Play" ["vfun"]="VFUN Launcher" ["tempo"]="Tempo Launcher" ["stove"]="STOVE Client" ["bigfish"]="Big Fish Games Manager" ["gryphlink"]="Gryphlink")
 
     for launcher in "${!names[@]}"; do
         if [[ -f "${paths1[$launcher]}" ]]; then
@@ -665,10 +564,9 @@ function CheckInstallations {
 # Verify launchers are installed
 function CheckInstallationDirectory {
     declare -A paths names
-    paths=(["nonsteamlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers" ["epicgameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher" ["goggalaxylauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GogGalaxyLauncher" ["uplaylauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/UplayLauncher" ["battlenetlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/Battle.netLauncher" ["eaapplauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/TheEAappLauncher" ["amazongameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/AmazonGamesLauncher" ["itchiolauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/itchioLauncher" ["legacygameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/LegacyGamesLauncher" ["humblegameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/HumbleGamesLauncher" ["indiegalalauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/IndieGalaLauncher" ["rockstargameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/RockstarGamesLauncher" ["glyphlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GlyphLauncher" ["minecraftlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/MinecraftLauncher" ["pspluslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/PlaystationPlusLauncher" ["vkplaylauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/VKPlayLauncher" ["hoyoplaylauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/HoYoPlayLauncher" ["nexonlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NexonLauncher" ["gamejoltlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GameJoltLauncher" ["artixgamelauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/ArtixGameLauncher" ["arc"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/ARCLauncher" ["poketcglauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/PokeTCGLauncher" ["antstreamlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/AntstreamLauncher" ["purplelauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/PURPLELauncher" ["plarium"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/PlariumLauncher" ["vfun"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/VFUNLauncher" ["tempo"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/TempoLauncher" ["stove"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/STOVELauncher")
+    paths=(["nonsteamlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers" ["epicgameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher" ["goggalaxylauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GogGalaxyLauncher" ["uplaylauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/UplayLauncher" ["battlenetlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/Battle.netLauncher" ["eaapplauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/TheEAappLauncher" ["amazongameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/AmazonGamesLauncher" ["itchiolauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/itchioLauncher" ["legacygameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/LegacyGamesLauncher" ["humblegameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/HumbleGamesLauncher" ["indiegalalauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/IndieGalaLauncher" ["rockstargameslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/RockstarGamesLauncher" ["glyphlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GlyphLauncher" ["minecraftlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/MinecraftLauncher" ["pspluslauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/PlaystationPlusLauncher" ["vkplaylauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/VKPlayLauncher" ["hoyoplaylauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/HoYoPlayLauncher" ["nexonlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NexonLauncher" ["gamejoltlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GameJoltLauncher" ["artixgamelauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/ArtixGameLauncher" ["arc"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/ARCLauncher" ["poketcglauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/PokeTCGLauncher" ["antstreamlauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/AntstreamLauncher" ["purplelauncher"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/PURPLELauncher" ["plarium"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/PlariumLauncher" ["vfun"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/VFUNLauncher" ["tempo"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/TempoLauncher" ["stove"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/STOVELauncher" ["bigfish"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/BigFishLauncher" ["gryphlink"]="${logged_in_home}/.local/share/Steam/steamapps/compatdata/GryphlinkLauncher")
 
-
-    names=(["nonsteamlauncher"]="NonSteamLaunchers" ["epicgameslauncher"]="EpicGamesLauncher" ["goggalaxylauncher"]="GogGalaxyLauncher" ["uplaylauncher"]="UplayLauncher" ["battlenetlauncher"]="Battle.netLauncher" ["eaapplauncher"]="TheEAappLauncher" ["amazongameslauncher"]="AmazonGamesLauncher" ["itchiolauncher"]="itchioLauncher" ["legacygameslauncher"]="LegacyGamesLauncher" ["humblegameslauncher"]="HumbleGamesLauncher" ["indiegalalauncher"]="IndieGalaLauncher" ["rockstargameslauncher"]="RockstarGamesLauncher" ["glyphlauncher"]="GlyphLauncher" ["minecraftlauncher"]="MinecraftLauncher" ["pspluslauncher"]="PlaystationPlusLauncher" ["vkplaylauncher"]="VKPlayLauncher" ["hoyoplaylauncher"]="HoYoPlayLauncher" ["nexonlauncher"]="NexonLauncher" ["gamejoltlauncher"]="GameJoltLauncher" ["artixgamelauncher"]="ArtixGameLauncher" ["arc"]="ARCLauncher" ["poketcg"]="PokeTCGLauncher" ["antstreamlauncher"]="AntstreamLauncher" ["purplelauncher"]="PURPLELauncher" ["plariumlauncher"]="PlariumLauncher" ["vfunlauncher"]="VFUNLauncher" ["tempolauncher"]="TempoLauncher" ["stovelauncher"]="STOVELauncher")
+    names=(["nonsteamlauncher"]="NonSteamLaunchers" ["epicgameslauncher"]="EpicGamesLauncher" ["goggalaxylauncher"]="GogGalaxyLauncher" ["uplaylauncher"]="UplayLauncher" ["battlenetlauncher"]="Battle.netLauncher" ["eaapplauncher"]="TheEAappLauncher" ["amazongameslauncher"]="AmazonGamesLauncher" ["itchiolauncher"]="itchioLauncher" ["legacygameslauncher"]="LegacyGamesLauncher" ["humblegameslauncher"]="HumbleGamesLauncher" ["indiegalalauncher"]="IndieGalaLauncher" ["rockstargameslauncher"]="RockstarGamesLauncher" ["glyphlauncher"]="GlyphLauncher" ["minecraftlauncher"]="MinecraftLauncher" ["pspluslauncher"]="PlaystationPlusLauncher" ["vkplaylauncher"]="VKPlayLauncher" ["hoyoplaylauncher"]="HoYoPlayLauncher" ["nexonlauncher"]="NexonLauncher" ["gamejoltlauncher"]="GameJoltLauncher" ["artixgamelauncher"]="ArtixGameLauncher" ["arc"]="ARCLauncher" ["poketcg"]="PokeTCGLauncher" ["antstreamlauncher"]="AntstreamLauncher" ["purplelauncher"]="PURPLELauncher" ["plariumlauncher"]="PlariumLauncher" ["vfunlauncher"]="VFUNLauncher" ["tempolauncher"]="TempoLauncher" ["stovelauncher"]="STOVELauncher" ["bigfishlauncher"]="BigFishLauncher")
 
     for launcher in "${!names[@]}"; do
         if [[ -d "${paths[$launcher]}" ]]; then
@@ -682,55 +580,95 @@ function CheckInstallationDirectory {
 
 #Get SD Card Path
 get_sd_path() {
-    # This assumes that the SD card is mounted under /run/media/deck/
-    local sd_path=$(df | grep '/run/media/deck/' | awk '{print $6}')
-    echo $sd_path
+    local sd_mount
+
+    sd_mount=$(lsblk -nr -o NAME,MOUNTPOINT \
+        | awk '$1 ~ /^mmcblk.*p[0-9]+$/ && $2 != "" { print $2; exit }')
+
+    if [[ -z "$sd_mount" ]]; then
+        zenity --error --text="No SD card detected. Please insert and mount an SD card."
+        exit 1
+    fi
+
+    echo "$sd_mount"
+}
+
+
+
+### update proton ge
+
+function patch_proton_script() {
+    proton_dir=$(find -L "${logged_in_home}/.steam/root/compatibilitytools.d" \
+        -maxdepth 1 -type d -name "GE-Proton*" | sort -V | tail -n1)
+
+    if [ -z "$proton_dir" ]; then
+        echo "No GE-Proton installation found to patch."
+        return
+    fi
+
+    proton_script="${proton_dir}/proton"
+    insert_line="os.environ['ENABLE_GAMESCOPE_WSI'] = '0'"
+
+    if [ -f "$proton_script" ] && ! grep -q "ENABLE_GAMESCOPE_WSI" "$proton_script"; then
+        echo "Patching Proton Python script to disable Gamescope WSI..."
+        sed -i "/^import protonfixes/a $insert_line" "$proton_script"
+    else
+        echo "Proton Python script already patched or not found."
+    fi
 }
 
 # Function For Updating Proton-GE
 function download_ge_proton() {
     echo "Downloading GE-Proton using the GitHub API"
-    cd "${logged_in_home}/Downloads/NonSteamLaunchersInstallation" || { echo "Failed to change directory. Exiting."; exit 1; }
+    cd "${logged_in_home}/Downloads/NonSteamLaunchersInstallation" || {
+        echo "Failed to change directory. Exiting."
+        exit 1
+    }
 
-    # Download tarball
-    tarball_url=$(curl -s https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest | grep browser_download_url | cut -d\" -f4 | grep .tar.gz)
+    tarball_url=$(curl -s https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest \
+        | grep browser_download_url | cut -d\" -f4 | grep .tar.gz)
+
     if [ -z "$tarball_url" ]; then
         echo "Failed to get tarball URL. Exiting."
         exit 1
     fi
-    curl --retry 5 --retry-delay 0 --retry-max-time 60 -sLOJ "$tarball_url"
-    if [ $? -ne 0 ]; then
+
+    curl --retry 5 --retry-delay 0 --retry-max-time 60 -sLOJ "$tarball_url" || {
         echo "Curl failed to download tarball. Exiting."
         exit 1
-    fi
+    }
 
-    # Download checksum
-    checksum_url=$(curl -s https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest | grep browser_download_url | cut -d\" -f4 | grep .sha512sum)
+    checksum_url=$(curl -s https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest \
+        | grep browser_download_url | cut -d\" -f4 | grep .sha512sum)
+
     if [ -z "$checksum_url" ]; then
         echo "Failed to get checksum URL. Exiting."
         exit 1
     fi
-    curl --retry 5 --retry-delay 0 --retry-max-time 60 -sLOJ "$checksum_url"
-    if [ $? -ne 0 ]; then
+
+    curl --retry 5 --retry-delay 0 --retry-max-time 60 -sLOJ "$checksum_url" || {
         echo "Curl failed to download checksum. Exiting."
         exit 1
-    fi
+    }
 
-    # Verify checksum
-    sha512sum -c ./*.sha512sum
-    if [ $? -ne 0 ]; then
+    sha512sum -c ./*.sha512sum || {
         echo "Checksum verification failed. Exiting."
         exit 1
+    }
+
+    ge_folder_name=$(tar -tf GE-Proton*.tar.gz | head -n1 | cut -d/ -f1)
+    target_dir="${logged_in_home}/.steam/root/compatibilitytools.d/${ge_folder_name}"
+
+    if [ -d "$target_dir" ]; then
+        echo "Removing existing ${ge_folder_name} for clean replacement..."
+        rm -rf "$target_dir"
     fi
 
-    # Extract tarball
-    tar -xf GE-Proton*.tar.gz -C "${logged_in_home}/.steam/root/compatibilitytools.d/"
-    if [ $? -ne 0 ]; then
+    tar -xf GE-Proton*.tar.gz -C "${logged_in_home}/.steam/root/compatibilitytools.d/" || {
         echo "Tar extraction failed. Exiting."
         exit 1
-    fi
+    }
 
-    proton_dir=$(find -L "${logged_in_home}/.steam/root/compatibilitytools.d" -maxdepth 1 -type d -name "GE-Proton*" | sort -V | tail -n1)
     echo "All done :)"
 }
 
@@ -738,29 +676,39 @@ function update_proton() {
     echo "0"
     echo "# Detecting, Updating and Installing GE-Proton...please wait..."
 
-    # Check if compatibilitytools.d exists and create it if it doesn't
     if [ ! -d "${logged_in_home}/.steam/root/compatibilitytools.d" ]; then
-        mkdir -p "${logged_in_home}/.steam/root/compatibilitytools.d" || { echo "Failed to create directory. Exiting."; exit 1; }
+        mkdir -p "${logged_in_home}/.steam/root/compatibilitytools.d" || {
+            echo "Failed to create directory. Exiting."
+            exit 1
+        }
     fi
 
-    # Create NonSteamLaunchersInstallation subfolder in Downloads folder
-    mkdir -p "${logged_in_home}/Downloads/NonSteamLaunchersInstallation" || { echo "Failed to create directory. Exiting."; exit 1; }
+    mkdir -p "${logged_in_home}/Downloads/NonSteamLaunchersInstallation" || {
+        echo "Failed to create directory. Exiting."
+        exit 1
+    }
 
-    # Set the path to the Proton directory
-    proton_dir=$(find -L "${logged_in_home}/.steam/root/compatibilitytools.d" -maxdepth 1 -type d -name "GE-Proton*" | sort -V | tail -n1)
+    proton_dir=$(find -L "${logged_in_home}/.steam/root/compatibilitytools.d" \
+        -maxdepth 1 -type d -name "GE-Proton*" | sort -V | tail -n1)
 
-    # Check if GE-Proton is installed
     if [ -z "$proton_dir" ]; then
         download_ge_proton
     else
-        # Check if installed version is the latest version
         installed_version=$(basename "$proton_dir" | sed 's/GE-Proton-//')
-        latest_version=$(curl -s https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest | grep tag_name | cut -d '"' -f 4)
+        latest_version=$(curl -s https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest \
+            | grep tag_name | cut -d '"' -f 4)
+
         if [ "$installed_version" != "$latest_version" ]; then
             download_ge_proton
         fi
     fi
+
+    patch_proton_script
 }
+
+### End of updating proton ge
+
+
 
 # Function For Updating UMU Launcher
 function download_umu_launcher() {
@@ -903,6 +851,9 @@ launcher_entries=(
   "$poketcg_value|$poketcg_text"
   "$antstream_value|$antstream_text"
   "$stove_value|$stove_text"
+  "$bigfish_value|$bigfish_text"
+  "$gryphlink_value|$gryphlink_text"
+  "FALSE|Hytale"
   "FALSE|RemotePlayWhatever"
   "FALSE|NVIDIA GeForce NOW"
   "FALSE|Moonlight Game Streaming"
@@ -911,6 +862,7 @@ launcher_entries=(
 chrome_entries=(
   "FALSE|Fortnite"
   "FALSE|Venge"
+  "FALSE|Super Monkey Ball Online"
   "FALSE|PokéRogue"
   "FALSE|Xbox Game Pass"
   "FALSE|Better xCloud"
@@ -957,14 +909,9 @@ custom_websites=()
 separate_appids=false
 
 # --- Handle command line arguments or fallback to GTK UI ---
-
 if [ $# -eq 0 ]; then
-    # No CLI args — show GTK UI
-
     readarray -t gtk_output < <(python3 - <<'EOF'
-import gi, os, sys
-import subprocess
-import re
+import gi, os, sys, subprocess, re
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
@@ -972,11 +919,11 @@ from gi.repository import Gtk
 def get_screen_resolution():
     xrandr_output = subprocess.check_output(["xrandr"]).decode("utf-8")
     resolutions = re.findall(r"(\d+)x(\d+)\s*\*+", xrandr_output)
-    return map(int, resolutions[0]) if resolutions else (1920, 1080)
+    return map(int, resolutions[0]) if resolutions else (1920,1080)
 
 def is_multiple_monitors():
     xrandr_output = subprocess.check_output(["xrandr"]).decode("utf-8")
-    return len(re.findall(r" connected", xrandr_output)) > 1
+    return len(re.findall(r" connected", xrandr_output))>1
 
 screen_width, screen_height = get_screen_resolution()
 if is_multiple_monitors():
@@ -985,14 +932,14 @@ if is_multiple_monitors():
     if match:
         screen_width, screen_height = map(int, match.groups())
 
-zenity_width = screen_width * 80 // 100
-zenity_height = screen_height * 80 // 100
+zenity_width = screen_width*80//100
+zenity_height = screen_height*80//100
 
-version = os.environ.get("UI_VERSION", "NSL")
-live = os.environ.get("UI_LIVE", "")
+version = os.environ.get("UI_VERSION","NSL")
+live = os.environ.get("UI_LIVE","")
 
-launcher_lines = os.environ.get("LAUNCHER_DATA", "").splitlines()
-chrome_lines = os.environ.get("CHROME_DATA", "").splitlines()
+launcher_lines = os.environ.get("LAUNCHER_DATA","").splitlines()
+chrome_lines = os.environ.get("CHROME_DATA","").splitlines()
 
 class LauncherUI(Gtk.Window):
     def __init__(self):
@@ -1001,81 +948,140 @@ class LauncherUI(Gtk.Window):
 
         self.store_launchers = Gtk.ListStore(bool, str)
         self.store_chrome = Gtk.ListStore(bool, str)
-
         for line in launcher_lines:
             if "|" in line:
-                value, label = line.split("|", 1)
-                active = value == "TRUE"
-                self.store_launchers.append([active, label])
-
+                value,label = line.split("|",1)
+                self.store_launchers.append([value=="TRUE", label])
         for line in chrome_lines:
             if "|" in line:
-                value, label = line.split("|", 1)
-                active = value == "TRUE"
-                self.store_chrome.append([active, label])
+                value,label = line.split("|",1)
+                self.store_chrome.append([value=="TRUE", label])
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin=10)
         self.add(main_box)
 
         header_label = Gtk.Label()
-        header_label.set_markup(f"<b>{version}</b> — Default = one App ID Installation, One Prefix, NonSteamLaunchers - updated the NSLGameScanner.py {live}")
+        header_label.set_markup(
+            f"<b>{version}</b> — Default = one App ID Installation, One Prefix, "
+            f"NonSteamLaunchers - updated the NSLGameScanner.py {live}"
+        )
+
+
         header_label.set_line_wrap(True)
         header_label.set_xalign(0)
         main_box.pack_start(header_label, False, False, 0)
 
-        def create_tree(model, toggle_callback):
+        # Helper for toggles
+        def create_tree(model,toggle_callback):
             tree = Gtk.TreeView(model=model)
             toggle = Gtk.CellRendererToggle()
-            toggle.connect("toggled", toggle_callback)
-            tree.append_column(Gtk.TreeViewColumn("Select", toggle, active=0))
-            tree.append_column(Gtk.TreeViewColumn("Launcher", Gtk.CellRendererText(), text=1))
+            toggle.connect("toggled",toggle_callback)
+            tree.append_column(Gtk.TreeViewColumn("Select",toggle,active=0))
+            tree.append_column(Gtk.TreeViewColumn("Name",Gtk.CellRendererText(),text=1))
             return tree
 
-        launcher_label = Gtk.Label(label="Launchers:")
-        launcher_label.set_xalign(0)
-        main_box.pack_start(launcher_label, False, False, 0)
-
-        launcher_tree = create_tree(self.store_launchers, self.on_toggle_launcher)
+        # Launchers Tree
+        main_box.pack_start(Gtk.Label(label="Launchers:", xalign=0), False, False, 0)
+        launcher_tree = create_tree(self.store_launchers,self.on_toggle_launcher)
         scrolled1 = Gtk.ScrolledWindow()
         scrolled1.set_vexpand(True)
         scrolled1.add(launcher_tree)
         main_box.pack_start(scrolled1, True, True, 0)
 
-        chrome_label = Gtk.Label(label="Google Chrome-based Services:")
-        chrome_label.set_xalign(0)
-        main_box.pack_start(chrome_label, False, False, 0)
-
-        chrome_tree = create_tree(self.store_chrome, self.on_toggle_chrome)
+        # Chrome Tree
+        main_box.pack_start(Gtk.Label(label="Browser-based Services:", xalign=0), False, False,0)
+        chrome_tree = create_tree(self.store_chrome,self.on_toggle_chrome)
         scrolled2 = Gtk.ScrolledWindow()
         scrolled2.set_vexpand(True)
         scrolled2.add(chrome_tree)
         main_box.pack_start(scrolled2, True, True, 0)
 
+        # Horizontal browser checkboxes
+        main_box.pack_start(Gtk.Label(label="Select a browser (required for web services or websites & will attempt to be installed if needed):", xalign=0), False, False,0)
+        self.browser_names = ["Google Chrome","Mozilla Firefox","Brave","Microsoft Edge", "Vivaldi", "LibreWolf"]
+        self.browser_checks = {}
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20, margin=5)
+        for name in self.browser_names:
+            check = Gtk.CheckButton(label=name)
+            check.connect("toggled", self.on_browser_checked, name)
+            self.browser_checks[name] = check
+            hbox.pack_start(check, False, False, 5)
+        main_box.pack_start(hbox, False, False, 0)
+
+        # Custom website names entry
+        self.entry_names = Gtk.Entry()
+        self.entry_names.set_placeholder_text("Enter the names for each site, separated by commas. E.g. Myspace, Limewire, AOL")
+        main_box.pack_start(self.entry_names, False, False, 0)
+
+        # Custom websites entry
         self.entry = Gtk.Entry()
         self.entry.set_placeholder_text("Enter custom websites that you want shortcuts for, separated by commas. Leave blank and press ok if you don't want any. E.g. myspace.com, limewire.com, my.screenname.aol.com")
         main_box.pack_start(self.entry, False, False, 0)
 
+        # Buttons
         button_box = Gtk.Box(spacing=6)
         self.button_result = None
-        for label in ["Cancel", "OK", "❤️", "Uninstall", "🔍", "Start Fresh", "Move to SD Card", "Update Proton-GE", "🖥️ Off", "NSLGameSaves", "README"]:
+        for label in ["Cancel","OK","❤️","Uninstall","🔍","Start Fresh","Move to SD Card","Update Proton-GE","🖥️ Off","NSLGameSaves","README"]:
             btn = Gtk.Button(label=label)
             btn.connect("clicked", self.on_button_clicked, label)
             button_box.pack_start(btn, True, True, 0)
-
         main_box.pack_start(button_box, False, False, 0)
 
+    # Toggle handlers
     def on_toggle_launcher(self, widget, path):
         self.store_launchers[path][0] = not self.store_launchers[path][0]
 
     def on_toggle_chrome(self, widget, path):
         self.store_chrome[path][0] = not self.store_chrome[path][0]
 
+    # Only one browser can be selected
+    def on_browser_checked(self, widget, name):
+        if widget.get_active():
+            for other_name, other_check in self.browser_checks.items():
+                if other_name != name:
+                    other_check.set_active(False)
+
+    # Button click
     def on_button_clicked(self, button, label):
-        selected = [row[1] for row in self.store_launchers if row[0]] + [row[1] for row in self.store_chrome if row[0]]
+        selected_launchers = [row[1] for row in self.store_launchers if row[0]]
+        selected_chrome = [row[1] for row in self.store_chrome if row[0]]
+        selected_browser = [name for name, check in self.browser_checks.items() if check.get_active()]
+        website_names = self.entry_names.get_text().strip()
         websites = self.entry.get_text().strip()
+
+        if label in ["Uninstall", "Move to SD Card"]:
+            if selected_launchers or selected_chrome or selected_browser or website_names or websites:
+                dlg = Gtk.MessageDialog(
+                    parent=self,
+                    flags=0,
+                    message_type=Gtk.MessageType.WARNING,
+                    buttons=Gtk.ButtonsType.OK,
+                    text=f"{label} requires no other selections."
+                )
+                dlg.format_secondary_text(
+                    "Please uncheck all launchers, services, browsers, and clear any custom websites before continuing."
+                )
+                dlg.run()
+                dlg.destroy()
+                return
+
+
+
+        # Enforce browser selection if needed
+        if (selected_chrome or websites) and not selected_browser:
+            dlg = Gtk.MessageDialog(parent=self, flags=0, message_type=Gtk.MessageType.WARNING,
+                                    buttons=Gtk.ButtonsType.OK,
+                                    text="You must select a browser if you chose a web service or entered a website.")
+            dlg.run()
+            dlg.destroy()
+            return
+
+        selected = selected_launchers + selected_chrome + selected_browser
         print("|".join(selected))
+        print(website_names)
         print(websites)
         print(label)
+        print("|".join(selected_browser))
         sys.stdout.flush()
         Gtk.main_quit()
 
@@ -1090,10 +1096,17 @@ EOF
 
 
 
-    selected_launchers_str="${gtk_output[0]}"
-    custom_websites_str="${gtk_output[1]}"
-    extra_button="${gtk_output[2]}"
 
+
+
+
+    selected_launchers_str="${gtk_output[0]}"
+    custom_website_names_str="${gtk_output[1]}"
+    custom_websites_str="${gtk_output[2]}"
+    extra_button="${gtk_output[3]}"
+    selected_browser="${gtk_output[4]}"
+
+    IFS=',' read -ra custom_website_names <<< "$custom_website_names_str"
     IFS=',' read -ra custom_websites <<< "$custom_websites_str"
     IFS='|' read -ra selected_launchers <<< "$selected_launchers_str"
 
@@ -1122,7 +1135,7 @@ else
         fi
     done
 
-    # ✅ Add this line after building the custom_websites array
+
     custom_websites_str=$(IFS=', '; echo "${custom_websites[*]}")
 
     extra_button="OK"
@@ -1194,147 +1207,69 @@ echo "Options: $options"
 
 
 
+
 # Define the StartFreshFunction
-function StartFreshFunction {
-    # Define the path to the compatdata directory
+StartFreshFunction() {
+    sd_path=$(get_sd_path)
+
     compatdata_dir="${logged_in_home}/.local/share/Steam/steamapps/compatdata"
-    # Define the path to the other directory
-    other_dir="${logged_in_home}/.local/share/Steam/steamapps/shadercache/"
+    other_dir="${logged_in_home}/.local/share/Steam/steamapps/shadercache"
 
-    # Define an array of original folder names
-    folder_names=("EpicGamesLauncher" "GogGalaxyLauncher" "UplayLauncher" "Battle.netLauncher" "TheEAappLauncher" "AmazonGamesLauncher" "itchioLauncher" "LegacyGamesLauncher" "HumbleGamesLauncher" "IndieGalaLauncher" "RockstarGamesLauncher" "GlyphLauncher" "PlaystationPlusLauncher" "VKPlayLauncher" "HoYoPlayLauncher" "NexonLauncher" "GameJoltLauncher" "ArtixGameLauncher" "ARCLauncher" "PokeTCGLauncher" "AntstreamLauncher" "PURPLELauncher" "PlariumLauncher" "VFUNLauncher" "TempoLauncher" "STOVELauncher")
-
-    # Define an array of app IDs
+    folder_names=("EpicGamesLauncher" "GogGalaxyLauncher" "UplayLauncher" "Battle.netLauncher" "TheEAappLauncher" "AmazonGamesLauncher" "itchioLauncher" "LegacyGamesLauncher" "HumbleGamesLauncher" "IndieGalaLauncher" "RockstarGamesLauncher" "GlyphLauncher" "PlaystationPlusLauncher" "VKPlayLauncher" "HoYoPlayLauncher" "NexonLauncher" "GameJoltLauncher" "ArtixGameLauncher" "ARCLauncher" "PokeTCGLauncher" "AntstreamLauncher" "PURPLELauncher" "PlariumLauncher" "VFUNLauncher" "TempoLauncher" "STOVELauncher" "BigFishLauncher" "NonSteamLaunchers" "MinecraftLauncher" "GryphlinkLauncher")
     app_ids=("3772819390" "4294900670" "4063097571" "3786021133" "3448088735" "3923904787" "3440562512" "2948446662" "3908676077" "4206469918" "3303169468" "3595505624" "4272271078" "3259996605" "2588786779" "4090616647" "3494943831" "2390200925" "4253976432" "2221882453" "2296676888" "2486751858" "3974004104" "3811372789" "3788101956" "3782277090" "3640061468" "3216372511" "2882622939" "2800812206" "2580882702" "4022508926" "4182617613" "1981254598" "2136059209" "1401184678" "3141683525")
 
-    # Iterate over each folder name in the folder_names array
+    delete_path() {
+        local path="$1"
+        if [ -e "$path" ]; then
+            if [ -L "$path" ]; then
+                target=$(readlink -f "$path")
+                rm -rf "$target"
+                unlink "$path"
+                echo "Deleted symlink and target: $path -> $target"
+            else
+                rm -rf "$path"
+                echo "Deleted folder: $path"
+            fi
+        fi
+    }
+
     for folder in "${folder_names[@]}"; do
-        # Check if the folder exists
-        if [ -e "${compatdata_dir}/${folder}" ]; then
-            # Check if the folder is a symbolic link
-            if [ -L "${compatdata_dir}/${folder}" ]; then
-                # Get the path of the target of the symbolic link
-                target_path=$(readlink -f "${compatdata_dir}/${folder}")
-
-                # Delete the target of the symbolic link
-                rm -rf "$target_path"
-
-                # Delete the symbolic link
-                unlink "${compatdata_dir}/${folder}"
-            else
-                # Delete the folder
-                # shellcheck disable=SC2115
-                rm -rf "${compatdata_dir}/${folder}"
-            fi
-        fi
+        delete_path "${compatdata_dir}/${folder}"
     done
 
-    # Iterate over each app ID in the app_ids array
     for app_id in "${app_ids[@]}"; do
-        # Check if the folder exists
-        if [ -e "${other_dir}/${app_id}" ]; then
-            # Check if the folder is a symbolic link
-            if [ -L "${other_dir}/${app_id}" ]; then
-                # Get the path of the target of the symbolic link
-                target_path=$(readlink -f "${other_dir}/${app_id}")
-
-                # Delete the target of the symbolic link
-                rm -rf "$target_path"
-
-                # Delete the symbolic link
-                unlink "${other_dir}/${app_id}"
-            else
-                # Delete the folder
-                # shellcheck disable=SC2115
-                rm -rf "${other_dir}/${app_id}"
-            fi
-        fi
+        delete_path "${other_dir}/${app_id}"
     done
 
-    # Check if the NonSteamLaunchers folder exists
-    if [ -e "$compatdata_dir/NonSteamLaunchers" ]; then
-        # Check if the NonSteamLaunchers folder is a symbolic link
-        if [ -L "$compatdata_dir/NonSteamLaunchers" ]; then
-            # Get the path of the target of the symbolic link
-            target_path=$(readlink -f "$compatdata_dir/NonSteamLaunchers")
-
-            # Delete the target of the symbolic link
-            rm -rf "$target_path"
-
-            # Delete the symbolic link
-            unlink "$compatdata_dir/NonSteamLaunchers"
-        else
-            # Delete the NonSteamLaunchers folder
-            rm -rf "$compatdata_dir/NonSteamLaunchers"
-        fi
-    fi
-
-    # Iterate over each folder in the compatdata directory
     for folder_path in "$compatdata_dir"/*; do
-        # Check if the current item is a folder
-        if [ -d "$folder_path" ]; then
-            # Check if the folder is empty
-            if [ -z "$(ls -A "$folder_path")" ]; then
-                # Delete the empty folder
-                rmdir "$folder_path"
-                echo "Deleted empty folder: $(basename "$folder_path")"
-            fi
-        fi
+        [ -d "$folder_path" ] && [ -z "$(ls -A "$folder_path")" ] && rmdir "$folder_path" && echo "Deleted empty folder: $(basename "$folder_path")"
     done
 
-    # TODO: declare array and use find/for loop to avoid duplicate `rm` processes
-    rm -rf "/run/media/mmcblk0p1/NonSteamLaunchers/"
-    rm -rf "/run/media/mmcblk0p1/EpicGamesLauncher/"
-    rm -rf "/run/media/mmcblk0p1/GogGalaxyLauncher/"
-    rm -rf "/run/media/mmcblk0p1/UplayLauncher/"
-    rm -rf "/run/media/mmcblk0p1/Battle.netLauncher/"
-    rm -rf "/run/media/mmcblk0p1/TheEAappLauncher/"
-    rm -rf "/run/media/mmcblk0p1/AmazonGamesLauncher/"
-    rm -rf "/run/media/mmcblk0p1/LegacyGamesLauncher/"
-    rm -rf "/run/media/mmcblk0p1/itchioLauncher/"
-    rm -rf "/run/media/mmcblk0p1/HumbleGamesLauncher/"
-    rm -rf "/run/media/mmcblk0p1/IndieGalaLauncher/"
-    rm -rf "/run/media/mmcblk0p1/RockstarGamesLauncher/"
-    rm -rf "/run/media/mmcblk0p1/GlyphLauncher/"
-    rm -rf "/run/media/mmcblk0p1/MinecraftLauncher/"
-    rm -rf "/run/media/mmcblk0p1/PlaystationPlusLauncher/"
-    rm -rf "/run/media/mmcblk0p1/VKPlayLauncher/"
-    rm -rf "/run/media/mmcblk0p1/HoYoPlayLauncher/"
-    rm -rf "/run/media/mmcblk0p1/NexonLauncher/"
-    rm -rf "/run/media/mmcblk0p1/GameJoltLauncher/"
-    rm -rf "/run/media/mmcblk0p1/ArtixGameLauncher/"
-    rm -rf "/run/media/mmcblk0p1/ARCLauncher/"
-    rm -rf "/run/media/mmcblk0p1/PokeTCGLauncher/"
-    rm -rf "/run/media/mmcblk0p1/AntstreamLauncher/"
-    rm -rf "/run/media/mmcblk0p1/PURPLELauncher/"
-    rm -rf "/run/media/mmcblk0p1/PlariumLauncher/"
-    rm -rf "/run/media/mmcblk0p1/VFUNLauncher/"
-    rm -rf "/run/media/mmcblk0p1/TempoLauncher/"
-    rm -rf "/run/media/mmcblk0p1/STOVELauncher/"
-    rm -rf ${logged_in_home}/Downloads/NonSteamLaunchersInstallation
-    rm -rf ${logged_in_home}/.config/systemd/user/Modules
-    rm -rf ${logged_in_home}/.config/systemd/user/env_vars
-    rm -rf ${logged_in_home}/.config/systemd/user/NSLGameScanner.py
-	rm -rf ${logged_in_home}/.config/systemd/user/shortcuts
-    rm -rf ${logged_in_home}/.local/share/applications/RemotePlayWhatever
-    rm -rf ${logged_in_home}/.local/share/applications/RemotePlayWhatever.desktop
-    rm -rf ${logged_in_home}/Downloads/NonSteamLaunchers-install.log
+    # Remove folders on SD card dynamically
+    for folder in "${folder_names[@]}"; do
+        delete_path "${sd_path}/${folder}"
+    done
 
-    # Delete the service file
-    rm -rf ${logged_in_home}/.config/systemd/user/nslgamescanner.service
+    delete_path "${logged_in_home}/Downloads/NonSteamLaunchersInstallation"
+    delete_path "${logged_in_home}/.config/systemd/user/Modules"
+    delete_path "${logged_in_home}/.config/systemd/user/env_vars"
+    delete_path "${logged_in_home}/.config/systemd/user/NSLGameScanner.py"
+    delete_path "${logged_in_home}/.config/systemd/user/shortcuts"
+    delete_path "${logged_in_home}/.config/systemd/user/descriptions.json"
+    delete_path "${logged_in_home}/.local/share/applications/RemotePlayWhatever"
+    delete_path "${logged_in_home}/.local/share/applications/RemotePlayWhatever.desktop"
+    delete_path "${logged_in_home}/Downloads/NonSteamLaunchers-install.log"
 
-    # Remove the symlink
-    unlink ${logged_in_home}/.config/systemd/user/default.target.wants/nslgamescanner.service
+    delete_path "${logged_in_home}/.config/systemd/user/nslgamescanner.service"
+    unlink "${logged_in_home}/.config/systemd/user/default.target.wants/nslgamescanner.service" 2>/dev/null || true
 
-    # Reload the systemd user instance
     systemctl --user daemon-reload
     systemctl --user reset-failed
 
-    show_message "NonSteamLaunhers has been wiped!"
-
-    # Exit the script with exit code 0 to indicate success
+    show_message "NonSteamLaunchers has been wiped!"
     exit 0
 }
+
 
 # Check if the Start Fresh button was clicked or if the Start Fresh option was passed as a command line argument
 if [[ $options == "Start Fresh" ]] || [[ $selected_launchers == "Start Fresh" ]]; then
@@ -1481,7 +1416,7 @@ nexon_file=${logged_in_home}/Downloads/NonSteamLaunchersInstallation/NexonLaunch
 
 
 # Set the URL to download the GameJolt Launcher file from
-gamejolt_url="https://download.gamejolt.net/6a0e7ebe06a802fb05521f0a75eaf67ffa3adfebcbdad5265d81a661cb856a9c,1759105340,7/data/games/5/162/362412/files/66bc359fe3e14/gamejoltclientsetup.exe"
+gamejolt_url="https://files.catbox.moe/mv4jos"
 
 
 # Set the path to save the GameJolt Launcher to
@@ -1532,6 +1467,17 @@ tempo_file="${logged_in_home}/Downloads/NonSteamLaunchersInstallation/TempoLaunc
 #StoveLauncher
 stove_url="https://sgs-live-dl.game.playstove.com/game/lcs/STOVESetup.exe"
 stove_file="${logged_in_home}/Downloads/NonSteamLaunchersInstallation/STOVESetup.exe"
+
+
+#bigfishLauncher
+bigfish_url="https://cdn-content.bigfishgames.com/prodstatic/games/gm_32/gm_installers/currentInstallers/Windows/bfginstaller32_s1_l1.exe"
+bigfish_file="${logged_in_home}/Downloads/NonSteamLaunchersInstallation/bfginstaller32_s1_l1.exe"
+
+
+gryphlink_url="https://launcher.hg-cdn.com/TiaytKBUIEdoEwRT/launcher/1.1.0/6/6/NVX60B0FgrIAIWH2/GRYPHLINK_v1.1.0.1107_6_6_endfield.exe"
+gryph_file="${logged_in_home}/Downloads/NonSteamLaunchersInstallation/GRYPHLINK_v1.1.0.1107_6_6_endfield.exe"
+
+
 
 
 #End of Downloads INFO
@@ -1837,6 +1783,26 @@ if [[ $uninstall_options == *"Uninstall STOVE Client"* ]]; then
     fi
 fi
 
+
+
+
+handle_uninstall_bfg() {
+    bfg_uninstaller="${logged_in_home}/.local/share/Steam/steamapps/compatdata/${1}/pfx/drive_c/Program Files (x86)/bfgclient/uninstall.exe"
+    handle_uninstall_common "$1" "$bfg_uninstaller" "/S" "Big Fish Games Manager"
+}
+
+# Uninstall BFG Client
+if [[ $uninstall_options == *"Uninstall Big Fish Games Manager"* ]]; then
+    if [[ -f "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/bfgclient/uninstall.exe" ]]; then
+        handle_uninstall_bfg "NonSteamLaunchers"
+
+    elif [[ -f "${logged_in_home}/.local/share/Steam/steamapps/compatdata/BigFishLauncher/pfx/drive_c/Program Files (x86)/bfgclient/uninstall.exe" ]]; then
+        handle_uninstall_bfg "BigFishLauncher"
+    fi
+fi
+
+
+
 uninstall_launcher() {
     local uninstall_options=$1
     local launcher=$2
@@ -1993,6 +1959,27 @@ process_uninstall_options() {
         fi
 
 
+        if [[ "$uninstall_options" == *"Uninstall Big Fish Games Manager"* ]]; then
+            if [[ -f "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/bfgclient/uninstall.exe" ]]; then
+                handle_uninstall_bfg "NonSteamLaunchers"
+                uninstall_launcher "$uninstall_options" "Big Fish Games Manager" "$bigfish_path1" "$bigfish_path2" "" "" "bigfish"
+            elif [[ -f "${logged_in_home}/.local/share/Steam/steamapps/compatdata/BigFishLauncher/pfx/drive_c/Program Files (x86)/bfgclient/uninstall.exe" ]]; then
+                handle_uninstall_bfg "BigFishLauncher"
+                uninstall_launcher "$uninstall_options" "Big Fish Games Manager" "$bigfish_path1" "$bigfish_path2" "" "" "bigfish"
+                rm -rf "${logged_in_home}/.local/share/Steam/steamapps/compatdata/BigFishLauncher"
+            fi
+        fi
+
+
+        if [[ $uninstall_options == *"Uninstall Hytale"* ]]; then
+            # Uninstall Hytale Launcher Flatpak app (user scope)
+            flatpak uninstall -y --delete-data --force-remove --user com.hypixel.HytaleLauncher
+
+            # Notify user
+            zenity --info --text="Hytale has been uninstalled." --width=250 --height=150 &
+            sleep 3
+            killall zenity
+        fi
 
         if [[ $uninstall_options == *"Uninstall RemotePlayWhatever"* ]]; then
             rm -rf "${logged_in_home}/.local/share/applications/RemotePlayWhatever"
@@ -2024,10 +2011,70 @@ process_uninstall_options() {
             killall zenity
         fi
 
+        if [[ $uninstall_options == *"Uninstall Google Chrome"* ]]; then
+
+            flatpak uninstall -y --force-remove --user com.google.Chrome
+
+            zenity --info --text="Google Chrome has been uninstalled." --width=250 --height=150 &
+            sleep 3
+            killall zenity
+        fi
+
+
+        if [[ $uninstall_options == *"Uninstall Mozilla Firefox"* ]]; then
+
+            flatpak uninstall -y --force-remove --user org.mozilla.firefox
+
+            zenity --info --text="Mozilla Firefox has been uninstalled." --width=250 --height=150 &
+            sleep 3
+            killall zenity
+        fi
+
+
+        if [[ $uninstall_options == *"Uninstall Brave"* ]]; then
+
+            flatpak uninstall -y --force-remove --user com.brave.Browser
+
+            zenity --info --text="Brave has been uninstalled." --width=250 --height=150 &
+            sleep 3
+            killall zenity
+        fi
+
+
+        if [[ $uninstall_options == *"Uninstall Microsoft Edge"* ]]; then
+
+            flatpak uninstall -y --force-remove --user com.microsoft.Edge
+
+            zenity --info --text="Microsoft Edge has been uninstalled." --width=250 --height=150 &
+            sleep 3
+            killall zenity
+        fi
+
+
+        if [[ $uninstall_options == *"Uninstall Vivaldi"* ]]; then
+
+            flatpak uninstall -y --force-remove --user com.vivaldi.Vivaldi
+
+            zenity --info --text="Vivaldi has been uninstalled." --width=250 --height=150 &
+            sleep 3
+            killall zenity
+        fi
+
+
+        if [[ $uninstall_options == *"Uninstall LibreWolf"* ]]; then
+
+            flatpak uninstall -y --force-remove --user io.gitlab.librewolf-community
+
+            zenity --info --text="LibreWolf has been uninstalled." --width=250 --height=150 &
+            sleep 3
+            killall zenity
+        fi
+
+
 
         uninstall_launcher "$uninstall_options" "Uplay" "$uplay_path1" "$uplay_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Ubisoft" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/UplayLauncher" "uplay" "ubisoft"
         uninstall_launcher "$uninstall_options" "Battle.net" "$battlenet_path1" "$battlenet_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Battle.net" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/Battle.netLauncher" "battle" "bnet"
-        uninstall_launcher "$uninstall_options" "Epic Games" "$epic_games_launcher_path1" "$epic_games_launcher_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Epic Games" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher" "epic"
+        uninstall_launcher "$uninstall_options" "Epic Games" "$epic_games_launcher_path1" "$epic_games_launcher_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files/Epic Games" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher" "epic"
         uninstall_launcher "$uninstall_options" "Amazon Games" "$amazongames_path1" "$amazongames_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/users/steamuser/AppData/Local/Amazon Games" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/AmazonGamesLauncher" "amazon"
         uninstall_launcher "$uninstall_options" "itch.io" "$itchio_path1" "$itchio_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/users/steamuser/AppData/Local/itch" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/itchioLauncher" "itchio"
         uninstall_launcher "$uninstall_options" "Humble Games Collection" "$humblegames_path1" "$humblegames_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files/Humble App" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/HumbleGamesLauncher" "humble"
@@ -2045,6 +2092,8 @@ process_uninstall_options() {
 
         uninstall_launcher "$uninstall_options" "VFUN Launcher" "$vfun_path1" "$vfun_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/VFUN/VLauncher" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/VFUNLauncher" "vfun"
 
+
+        uninstall_launcher "$uninstall_options" "Gryphlink" "$gryphlink_path1" "$gryphlink_path2" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files/GRYPHLINK" "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files/GRYPHLINK" "gryphlink"
     fi
     # If the uninstall was successful,  set uninstalled_any_launcher to true
     if [ $? -eq 0 ]; then
@@ -2110,10 +2159,19 @@ else
             FALSE "Tempo Launcher" \
             FALSE "Pokémon Trading Card Game Live" \
             FALSE "Antstream Arcade" \
+            FALSE "Big Fish Games Manager" \
             FALSE "RemotePlayWhatever" \
             FALSE "NVIDIA GeForce NOW" \
             FALSE "STOVE Client" \
             FALSE "Moonlight Game Streaming" \
+            FALSE "Google Chrome" \
+            FALSE "Mozilla Firefox" \
+            FALSE "Brave" \
+            FALSE "Microsoft Edge" \
+            FALSE "Vivaldi" \
+            FALSE "LibreWolf" \
+			FALSE "Hytale" \
+			FALSE "Gryphlink" \
         )
         # Convert the returned string to an array
         IFS='|' read -r -a uninstall_options_array <<< "$uninstall_options"
@@ -2129,69 +2187,131 @@ fi
 #End of Uninstall
 
 
-move_to_sd() {
-    local launcher_id=$1
-    local original_dir="${logged_in_home}/.local/share/Steam/steamapps/compatdata/${launcher_id}"
-    local sd_path=$(get_sd_path)
-    local new_dir="${sd_path}/${launcher_id}"
+#SD CARD
+#SD CARD
+move_launcher_to_sd() {
+    local launcher_name=$1
+    local compat_dir="${logged_in_home}/.local/share/Steam/steamapps/compatdata"
+    local sd_path
+    sd_path=$(get_sd_path) || return 1
 
-    # Resolve symbolic link to its target
-    if [[ -L "${original_dir}" ]]; then
-        original_dir=$(readlink "${original_dir}")
+    local launcher_link="${compat_dir}/${launcher_name}"
+
+    # Check if launcher exists
+    if [[ ! -e "$launcher_link" ]]; then
+        zenity --warning --text="$launcher_name does not exist." --width=300 --height=100
+        echo "$launcher_name does not exist"
+        return 1
     fi
 
-    if [[ -d "${original_dir}" ]] && [[ $move_options == *"${launcher_id}"* ]]; then
-        mv "${original_dir}" "${new_dir}"
-        ln -s "${new_dir}" "${original_dir}"
+    local number_folder
+    number_folder=$(readlink -f "$launcher_link")
+
+    if [[ "$number_folder" == "$sd_path"* ]]; then
+        echo "# $launcher_name is already on the SD card."
+        return 0
+    fi
+
+    local sd_folder="${sd_path}/${launcher_name}"
+
+    echo "# Moving $launcher_name to SD card..."
+    mkdir -p "$sd_folder"
+    rsync -a "$number_folder/" "$sd_folder/" || {
+        zenity --error --text="Failed to copy $launcher_name to SD card." --width=300 --height=100
+        return 1
+    }
+
+    rm -rf "$number_folder"
+    ln -s "$sd_folder" "$number_folder"
+
+    rm -f "$launcher_link"
+    ln -s "$number_folder" "$launcher_link"
+}
+
+move_all_selected() {
+    local any_moved=0
+    (
+        for launcher in "${selected_launchers[@]}"; do
+            if move_launcher_to_sd "$launcher"; then
+                any_moved=1
+            fi
+        done
+    ) | zenity --progress \
+        --title="Moving Launchers to SD Card" \
+        --text="Copying files…" \
+        --pulsate \
+        --auto-close \
+        --width=400
+
+    if [[ $any_moved -eq 0 ]]; then
+        zenity --info --text="No launchers were moved. They may already be on the SD card or do not exist." --width=350 --height=100
     fi
 }
 
-# Check if the first command line argument is "Move to SD Card"
+# Main script logic
 if [[ $1 == "Move to SD Card" ]]; then
-    # Shift the arguments to remove the first one
     shift
-
-    # Use the remaining arguments as the launcher IDs to move
     for launcher in "$@"; do
-        move_to_sd "$launcher"
+        move_launcher_to_sd "$launcher"
     done
 else
-    # The first command line argument is not "Move to SD Card"
-    # Use Zenity to get the launcher IDs to move
     if [[ $options == "Move to SD Card" ]]; then
         CheckInstallationDirectory
 
-    move_options=$(zenity --list --text="Which launcher IDs do you want to move to the SD card?" --checklist --column="Select" --column="Launcher ID" $nonsteamlauncher_move_value "NonSteamLaunchers" $epicgameslauncher_move_value "EpicGamesLauncher" $goggalaxylauncher_move_value "GogGalaxyLauncher" $uplaylauncher_move_value "UplayLauncher" $battlenetlauncher_move_value "Battle.netLauncher" $eaapplauncher_move_value "TheEAappLauncher" $amazongameslauncher_move_value "AmazonGamesLauncher" $itchiolauncher_move_value "itchioLauncher" $legacygameslauncher_move_value "LegacyGamesLauncher" $humblegameslauncher_move_value "HumbleGamesLauncher" $indiegalalauncher_move_value "IndieGalaLauncher" $rockstargameslauncher_move_value "RockstarGamesLauncher" $glyphlauncher_move_value "GlyphLauncher" "$minecraftlauncher_move_value" "MinecraftLauncher" $pspluslauncher_move_value "PlaystationPlusLauncher" $vkplaylauncher_move_value "VKPlayLauncher" $hoyoplaylauncher_move_value "HoYoPlayLauncher" $nexonlauncher_move_value "NexonLauncher" $gamejoltlauncher_move_value "GameJoltLauncher" $artixgame_move_value "ArtixGameLauncher" $arc_move_value "ARCLauncher" $purple_move_value "PURPLELauncher" $plarium_move_value "PlariumLauncher" $vfun_move_value "VFUNLauncher" $tempo_move_value "TempoLauncher" $poketcg_move_value "PokeTCGLauncher" $antstream_move_value "AntstreamLauncher" "$stove_move_value" "STOVELauncher" --width=335 --height=524)
+        move_options=$(zenity --list --text="Which launcher IDs do you want to move to the SD card?" \
+            --checklist --column="Select" --column="Launcher ID" \
+            $nonsteamlauncher_move_value "NonSteamLaunchers" \
+            $epicgameslauncher_move_value "EpicGamesLauncher" \
+            $goggalaxylauncher_move_value "GogGalaxyLauncher" \
+            $uplaylauncher_move_value "UplayLauncher" \
+            $battlenetlauncher_move_value "Battle.netLauncher" \
+            $eaapplauncher_move_value "TheEAappLauncher" \
+            $amazongameslauncher_move_value "AmazonGamesLauncher" \
+            $itchiolauncher_move_value "itchioLauncher" \
+            $legacygameslauncher_move_value "LegacyGamesLauncher" \
+            $humblegameslauncher_move_value "HumbleGamesLauncher" \
+            $indiegalalauncher_move_value "IndieGalaLauncher" \
+            $rockstargameslauncher_move_value "RockstarGamesLauncher" \
+            $glyphlauncher_move_value "GlyphLauncher" \
+            $minecraftlauncher_move_value "MinecraftLauncher" \
+            $pspluslauncher_move_value "PlaystationPlusLauncher" \
+            $vkplaylauncher_move_value "VKPlayLauncher" \
+            $hoyoplaylauncher_move_value "HoYoPlayLauncher" \
+            $nexonlauncher_move_value "NexonLauncher" \
+            $gamejoltlauncher_move_value "GameJoltLauncher" \
+            $artixgame_move_value "ArtixGameLauncher" \
+            $arc_move_value "ARCLauncher" \
+            $purple_move_value "PURPLELauncher" \
+            $plarium_move_value "PlariumLauncher" \
+            $vfun_move_value "VFUNLauncher" \
+            $tempo_move_value "TempoLauncher" \
+            $poketcg_move_value "PokeTCGLauncher" \
+            $antstream_move_value "AntstreamLauncher" \
+            $stove_move_value "STOVELauncher" \
+            $bigfish_move_value "BigFishLauncher" \
+            --width=335 --height=524)
 
-    if [ $? -eq 0 ]; then
-        zenity --info --text="The selected directories have been moved to the SD card and symbolic links have been created." --width=200 --height=150
-
-        IFS="|" read -ra selected_launchers <<< "$move_options"
-        for launcher in "${selected_launchers[@]}"; do
-            move_to_sd "$launcher"
-        done
-    fi
-
-        IFS="|" read -ra selected_launchers <<< "$move_options"
-        for launcher in "${selected_launchers[@]}"; do
-            move_to_sd "$launcher"
-        done
-
-        if [ $? -eq 0 ]; then
-            zenity --info --text="The selected directories have been moved to the SD card and symbolic links have been created." --width=200 --height=150
+        if [[ $? -eq 0 ]]; then
+            IFS="|" read -ra selected_launchers <<< "$move_options"
+            move_all_selected
         fi
-        # Exit the script
+
         exit 0
     fi
-
 fi
 
+
+
+
+
+#Stop Scanner
 function stop_service {
     # Stop the service
     systemctl --user stop nslgamescanner.service
 
     # Delete the NSLGameScanner.py
     rm -rf ${logged_in_home}/.config/systemd/user/NSLGameScanner.py
+    rm -rf ${logged_in_home}/.config/systemd/user/descriptions.json
 
     # Delete the service file
     rm -rf ${logged_in_home}/.config/systemd/user/nslgamescanner.service
@@ -2202,6 +2322,66 @@ function stop_service {
     # Reload the systemd user instance
     systemctl --user daemon-reload
     systemctl --user reset-failed
+}
+
+update_nsl_game_scanner() {
+    repo_url='https://github.com/moraroy/NonSteamLaunchers-On-Steam-Deck/archive/refs/heads/main.zip'
+    folders_to_clone=('requests' 'urllib3' 'steamgrid' 'vdf' 'charset_normalizer')
+
+    parent_folder="${logged_in_home}/.config/systemd/user/Modules"
+    python_script_path="${logged_in_home}/.config/systemd/user/NSLGameScanner.py"
+    github_link="https://raw.githubusercontent.com/moraroy/NonSteamLaunchers-On-Steam-Deck/main/NSLGameScanner.py"
+    env_vars="${logged_in_home}/.config/systemd/user/env_vars"
+    steam_debug_file="${logged_in_home}/.local/share/Steam/.cef-enable-remote-debugging"
+    nsl_config_dir="${logged_in_home}/.var/app/com.github.mtkennerly.ludusavi/config/ludusavi/NSLconfig"
+
+    # Stop and disable the service if it exists
+    if systemctl --user list-unit-files | grep -q "nslgamescanner.service"; then
+        if systemctl --user is-active --quiet nslgamescanner.service; then
+            systemctl --user stop nslgamescanner.service
+        fi
+
+        systemctl --user disable nslgamescanner.service 2>/dev/null || true
+    fi
+
+    # Remove the old python script if it exists
+    rm -f "$python_script_path"
+
+    # Create the parent folder if it doesn't exist
+    mkdir -p "${parent_folder}"
+
+    folders_exist=true
+    for folder in "${folders_to_clone[@]}"; do
+        if [ ! -d "${parent_folder}/${folder}" ]; then
+            folders_exist=false
+            break
+        fi
+    done
+
+    # Download and unzip the repo if necessary
+    if [ "${folders_exist}" = false ]; then
+        zip_file_path="${parent_folder}/repo.zip"
+
+        wget -O "${zip_file_path}" "${repo_url}" || { echo 'Download failed'; exit 1; }
+
+        unzip -d "${parent_folder}" "${zip_file_path}" || { echo 'Unzip failed'; exit 1; }
+
+        for folder in "${folders_to_clone[@]}"; do
+            destination_path="${parent_folder}/${folder}"
+            source_path="${parent_folder}/NonSteamLaunchers-On-Steam-Deck-main/Modules/${folder}"
+            if [ -d "${source_path}" ]; then
+                mv "${source_path}" "${destination_path}" || { echo "Move failed for ${folder}"; exit 1; }
+            fi
+        done
+
+        rm -f "${zip_file_path}"
+        rm -rf "${parent_folder}/NonSteamLaunchers-On-Steam-Deck-main"
+    fi
+
+    # Download the latest Python script
+    curl -fsSL -o "$python_script_path" "$github_link"
+    chmod +x "$python_script_path"
+    python3 "$python_script_path"
 }
 
 # Get the command line arguments
@@ -2221,14 +2401,21 @@ if [[ " ${args[@]} " =~ " 🔍 " ]] || [[ $options == "🔍" ]]; then
     zenity --question --text="NSLGameScanner has been stopped and is no longer scanning for games. Do you want to run it again? Pressing 'Yes' will turn on 'Auto Scan' until you stop it again." --width=200 --height=150
     if [ $? = 0 ]; then
         # User wants to run NSLGameScanner again
-        python3 $python_script_path
         show_message "NSLGameScanner is now restarting!"
+        update_nsl_game_scanner
+        if systemctl --user list-unit-files | grep -q "nslgamescanner.service"; then
+            echo "[NSL] Starting NSL Game Scanner service..."
+            systemctl --user start nslgamescanner.service
+        else
+            echo "[NSL] Service file not found — skipping start."
+        fi
     else
         # User does not want to run NSLGameScanner again
         stop_service
 		exit 0
     fi
 fi
+# Stop Scanner
 
 
 # TODO: probably better to break this subshell into a function that can then be redirected to zenity
@@ -2624,6 +2811,18 @@ function install_nexon {
 }
 
 
+# Big Fish specific installation function
+function install_bigfish {
+    "$STEAM_RUNTIME" "$proton_dir/proton" run "$bigfish_file" /S &
+    bigfish_pid=$!
+
+    wait $bigfish_pid
+    echo "Big Fish Games Manager installation complete."
+    pkill CrBrowserMain
+}
+
+
+
 # HoYo specific installation steps
 function install_hoyo {
     hoyo_dir="${logged_in_home}/.local/share/Steam/steamapps/compatdata/${appid}/pfx/drive_c/Program Files/HoYoPlay"
@@ -2721,6 +2920,51 @@ install_psplus() {
 
 
 
+
+# Gryphlink specific installation steps
+install_gryphlink() {
+    gryphlink_dir="${logged_in_home}/.local/share/Steam/steamapps/compatdata/${appid}/pfx/drive_c/Program Files/GRYPHLINK"
+    tmp_installer="${logged_in_home}/Downloads/NonSteamLaunchersInstallation/GRYPHLINK_installer.exe"
+
+    version="$(echo "${gryphlink_url}" | sed -E 's#.*/launcher/([^/]+)/.*#\1#')"
+
+    [ ! -d "${gryphlink_dir}" ] && mkdir -p "${gryphlink_dir}"
+
+    curl -L -o "${tmp_installer}" "${gryphlink_url}"
+
+    command -v 7z >/dev/null 2>&1 || { echo "7z not found, install p7zip"; exit 1; }
+
+    7z x "${tmp_installer}" -o"${gryphlink_dir}" -aoa
+
+    [ -d "${gryphlink_dir}/\$0/${version}" ] && mv "${gryphlink_dir}/\$0/${version}" "${gryphlink_dir}/${version}"
+
+    rm -rf "${gryphlink_dir}/\$0" "${gryphlink_dir}/\$PLUGINSDIR"
+    rm -f "${tmp_installer}"
+
+    mkdir -p "${gryphlink_dir}/Cache/Config"
+
+    [ -f "${gryphlink_dir}/${version}/Launcher.exe" ] && cp "${gryphlink_dir}/${version}/Launcher.exe" "${gryphlink_dir}/Launcher.exe"
+    [ -f "${gryphlink_dir}/${version}/Uninstall.exe" ] && cp "${gryphlink_dir}/${version}/Uninstall.exe" "${gryphlink_dir}/Uninstall.exe"
+
+    if command -v tree >/dev/null 2>&1; then
+        tree -L 3 "${gryphlink_dir}"
+    else
+        ls -R "${gryphlink_dir}"
+    fi
+
+    echo "Removing installer file..."
+    rm -f "${gryphlink_dir}/GRYPHLINK_installer.exe" || {
+        echo "Failed to remove installer file"
+        return 1
+    }
+
+    echo "Gryphlink installation steps completed successfully"
+}
+
+
+
+
+
 #Launcher Installs
 function install_launcher {
     launcher_name=$1
@@ -2784,6 +3028,10 @@ function install_launcher {
 
 
                 install_battlenet
+            elif [ "$launcher_name" = "Big Fish Games Manager" ]; then
+
+
+                install_bigfish
             elif [ "$launcher_name" = "Amazon Games" ]; then
                 "$STEAM_RUNTIME" "$proton_dir/proton" run "$amazon_file" &
                 install_amazon
@@ -2802,7 +3050,7 @@ function install_launcher {
                 sleep 5
                 echo "ARC Launcher installation complete."
             else
-                "$STEAM_RUNTIME" "$proton_dir/proton" run ${run_command} &
+                "$STEAM_RUNTIME" "$proton_dir/proton" run "$run_command" &
             fi
         else
             "$STEAM_RUNTIME" "$proton_dir/proton" run ${run_command}
@@ -2899,70 +3147,13 @@ install_launcher "Tempo Launcher" "TempoLauncher" "$tempo_file" "$tempo_url" "$t
 #Install Stove Client
 install_launcher "STOVE Client" "STOVELauncher" "$stove_file" "$stove_url" "$stove_file" "96" "install_stove" "" true
 
+install_launcher "Big Fish Games Manager" "BigFishLauncher" "$bigfish_file" "$bigfish_url" "$bigfish_file /S" "97" "" "" true
+
+
+install_launcher "Gryphlink" "GryphlinkLauncher" "$gryphlink_file" "$gryphlink_url" "" "98" "" "install_gryphlink" true
+
 
 #End of Launcher Installations
-
-# Temporary fix for Epic
-if [[ $options == *"Epic Games"* ]]; then
-
-    function install_epic {
-
-        pkill -f wineserver
-
-        # Check if the first path exists, otherwise use the second one
-        if [[ -f "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries/Win32/EpicGamesLauncher.exe" ]]; then
-            echo "Starting first installation of Epic Games Launcher"
-            "$STEAM_RUNTIME" "$proton_dir/proton" run "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries/Win32/EpicGamesLauncher.exe" &
-            first_install_pid=$!
-        elif [[ -f "${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries/Win32/EpicGamesLauncher.exe" ]]; then
-            echo "First path doesn't exist, trying the alternative path"
-            "$STEAM_RUNTIME" "$proton_dir/proton" run "${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/Binaries/Win32/EpicGamesLauncher.exe" &
-            first_install_pid=$!
-        else
-            echo "Neither of the expected paths exist. Exiting."
-            exit 1
-        fi
-
-        # Wait for the installation to complete
-        wait $first_install_pid
-        sleep 5
-
-        # Rsync for syncing engine files (using logged_in_home)
-        rsync -av --progress \
-          "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Update/Install/Engine/" \
-          "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Engine/"
-
-        # Rsync for syncing portal files (using logged_in_home)
-        rsync -av --progress \
-          "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Update/Install/Portal/" \
-          "${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/"
-
-
-        rsync -av --progress \
-          "${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher/pfx/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Update/Install/Engine/" \
-          "${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Engine/"
-
-        # Rsync for syncing portal files (using logged_in_home)
-        rsync -av --progress \
-          "${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher/pfx/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Update/Install/Portal/" \
-          "${logged_in_home}/.local/share/Steam/steamapps/compatdata/EpicGamesLauncher/pfx/drive_c/Program Files (x86)/Epic Games/Launcher/Portal/"
-
-        # Download and run Epic Online Services installer
-        eos_dir="${logged_in_home}/Downloads/NonSteamLaunchersInstallation"
-        eos_file="${eos_dir}/EpicOnlineServicesInstaller.exe"
-        eos_url="https://tinyurl.com/mt8bce8k"
-
-        echo "Downloading Epic Online Services installer..."
-        mkdir -p "$eos_dir"
-        wget -L -O "$eos_file" "$eos_url"
-
-        echo "Running Epic Online Services installer with Proton..."
-        "$STEAM_RUNTIME" "$proton_dir/proton" run "$eos_file"
-    }
-
-    # Call the install_epic function
-    install_epic
-fi
 
 
 
@@ -2972,34 +3163,61 @@ fi
 
 
 echo "99"
-echo "# Checking if Chrome is installed...please wait..."
+echo "# Checking if a browser is needed...please wait..."
 
-# Check if user selected any of the options
-if [[ $options == *"Apple TV+"* ]] || [[ $options == *"Plex"* ]] || [[ $options == *"Crunchyroll"* ]] || [[ $options == *"WebRcade"* ]] || [[ $options == *"WebRcade Editor"* ]] || [[ $options == *"Netflix"* ]] || [[ $options == *"Fortnite"* ]] || [[ $options == *"Venge"* ]] || [[ $options == *"Xbox Game Pass"* ]] || [[ $options == *"Better xCloud"* ]] || [[ $options == *"Geforce Now"* ]] || [[ $options == *"Boosteroid Cloud Gaming"* ]] || [[ $options == *"Amazon Luna"* ]] || [[ $options == *"Hulu"* ]] || [[ $options == *"Tubi"* ]] || [[ $options == *"Disney+"* ]] || [[ $options == *"Amazon Prime Video"* ]] || [[ $options == *"Youtube"* ]] || [[ $options == *"Youtube TV"* ]] || [[ $options == *"Twitch"* ]] || [[ $options == *"Stim.io"* ]] || [[ $options == *"WatchParty"* ]] || [[ $options == *"PokéRogue"* ]] || [[ $options == *"Afterplay.io"* ]] || [[ $options == *"OnePlay"* ]] || [[ $options == *"AirGPU"* ]] || [[ $options == *"CloudDeck"* ]] || [[ $options == *"JioGamesCloud"* ]] || [[ $options == *"Cloudy Pad"* ]]; then
+# Check if user selected any browser-based service or entered a website
+if [[ $options == *"Apple TV+"* ]] || [[ $options == *"Plex"* ]] || [[ $options == *"Crunchyroll"* ]] || \
+   [[ $options == *"WebRcade"* ]] || [[ $options == *"WebRcade Editor"* ]] || [[ $options == *"Netflix"* ]] || \
+   [[ $options == *"Fortnite"* ]] || [[ $options == *"Venge"* ]] || [[ $options == *"Super Monkey Ball Online"* ]] || [[ $options == *"Xbox Game Pass"* ]] || \
+   [[ $options == *"Better xCloud"* ]] || [[ $options == *"Geforce Now"* ]] || [[ $options == *"Boosteroid Cloud Gaming"* ]] || \
+   [[ $options == *"Amazon Luna"* ]] || [[ $options == *"Hulu"* ]] || [[ $options == *"Tubi"* ]] || \
+   [[ $options == *"Disney+"* ]] || [[ $options == *"Amazon Prime Video"* ]] || [[ $options == *"Youtube"* ]] || \
+   [[ $options == *"Youtube TV"* ]] || [[ $options == *"Twitch"* ]] || [[ $options == *"Stim.io"* ]] || \
+   [[ $options == *"WatchParty"* ]] || [[ $options == *"PokéRogue"* ]] || [[ $options == *"Afterplay.io"* ]] || \
+   [[ $options == *"OnePlay"* ]] || [[ $options == *"AirGPU"* ]] || [[ $options == *"CloudDeck"* ]] || \
+   [[ $options == *"JioGamesCloud"* ]] || [[ $options == *"Cloudy Pad"* ]] || [[ -n "$custom_websites_str" ]]; then
 
-    # User selected one of the options
-    echo "User selected one of the options"
+    echo "User selected a Browser-based service or entered a website"
 
-    # Check if Google Chrome is already installed
-    if flatpak list | grep com.google.Chrome &> /dev/null; then
-        echo "Google Chrome is already installed"
-        flatpak --user override --filesystem=/run/udev:ro com.google.Chrome
-    else
-        # Check if the Flathub repository exists
-        if flatpak remote-list | grep flathub &> /dev/null; then
-            echo "Flathub repository exists"
-        else
-            # Add the Flathub repository
+    # Determine which browser the user selected (correct Flatpak IDs)
+    selected_browser=""
+    if [[ "$options" == *"Google Chrome"* ]]; then
+        selected_browser="com.google.Chrome"
+    elif [[ "$options" == *"Mozilla Firefox"* ]]; then
+        selected_browser="org.mozilla.firefox"
+    elif [[ "$options" == *"Brave"* ]]; then
+        selected_browser="com.brave.Browser"
+    elif [[ "$options" == *"Microsoft Edge"* ]]; then
+        selected_browser="com.microsoft.Edge"
+    elif [[ "$options" == *"Vivaldi"* ]]; then
+        selected_browser="com.vivaldi.Vivaldi"
+    elif [[ "$options" == *"LibreWolf"* ]]; then
+        selected_browser="io.gitlab.librewolf-community"
+    fi
+
+    # Install the selected browser if any
+    if [[ -n "$selected_browser" ]]; then
+        echo "User selected browser: $selected_browser"
+
+        # Ensure Flathub repository exists
+        if ! flatpak remote-list | grep flathub &> /dev/null; then
+            echo "Adding Flathub repository..."
             flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
         fi
 
-        # Install Google Chrome
-        flatpak install --user flathub com.google.Chrome -y
+        # Install the browser if not already installed
+        if flatpak list | grep "$selected_browser" &> /dev/null; then
+            echo "$selected_browser is already installed"
+        else
+            echo "Installing $selected_browser..."
+            flatpak install --user flathub "$selected_browser" -y
+        fi
 
-        # Run the flatpak --user override command
-        flatpak --user override --filesystem=/run/udev:ro com.google.Chrome
+        # Apply the override (if applicable)
+        flatpak --user override --filesystem=/run/udev:ro "$selected_browser"
     fi
 fi
+
 
 
 
@@ -3044,21 +3262,40 @@ fi
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 echo "99.3"
+echo "# Installing Hytale (Native Linux) ...please wait..."
+
+if [[ $options == *"Hytale"* ]]; then
+    if flatpak info --user com.hypixel.HytaleLauncher &>/dev/null || flatpak info --system com.hypixel.HytaleLauncher &>/dev/null; then
+        echo "Hytale is already installed (user or system)."
+    else
+        echo "Downloading Hytale Flatpak..."
+        curl -L -o /tmp/hytale-launcher.flatpak https://launcher.hytale.com/builds/release/linux/amd64/hytale-launcher-latest.flatpak
+
+        echo "Installing Hytale Flatpak app (user scope)..."
+        if flatpak install -y --user /tmp/hytale-launcher.flatpak; then
+            echo "Hytale Launcher installed successfully."
+        else
+            echo "Failed to install Hytale Launcher."
+        fi
+    fi
+fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+echo "99.4"
 echo "# Checking if Ludusavi is installed...please wait..."
 
 # AutoInstall Ludusavi
@@ -3238,6 +3475,10 @@ roots:
     path: ${logged_in_home}/.local/share/Steam/steamapps/compatdata/TempoLauncher/pfx/drive_c/
   - store: otherWindows
     path: ${logged_in_home}/.local/share/Steam/steamapps/compatdata/STOVELauncher/pfx/drive_c/
+  - store: otherWindows
+    path: ${logged_in_home}/.local/share/Steam/steamapps/compatdata/BigFishLauncher/pfx/drive_c/
+  - store: otherWindows
+    path: ${logged_in_home}/.local/share/Steam/steamapps/compatdata/GryphlinkLauncher/pfx/drive_c/
 redirects: []
 backup:
   path: ${logged_in_home}/NSLGameSaves
@@ -3384,6 +3625,10 @@ check_and_write "plarium" "$plarium_path1" "$plarium_path2" "NonSteamLaunchers" 
 check_and_write "vfun" "$vfun_path1" "$vfun_path2" "NonSteamLaunchers" "VFUNLauncher" "" "vfun_launcher"
 check_and_write "tempo" "$tempo_path1" "$tempo_path2" "NonSteamLaunchers" "TempoLauncher" "" "tempo_launcher"
 check_and_write "stove" "$stove_path1" "$stove_path2" "NonSteamLaunchers" "STOVELauncher" "" "stove_launcher"
+check_and_write "bigfish" "$bigfish_path1" "$bigfish_path2" "NonSteamLaunchers" "BigFishLauncher" "" "bigfish_launcher"
+check_and_write "gryphlink" "$gryphlink_path1" "$gryphlink_path2" "NonSteamLaunchers" "GryphlinkLauncher" "" "gryphlink_launcher"
+
+
 
 # Special Shortcut for EA App NoRepair
 eaapp_path1="${logged_in_home}/.local/share/Steam/steamapps/compatdata/NonSteamLaunchers/pfx/drive_c/users/steamuser/Downloads/EAappInstaller.exe"
@@ -3444,13 +3689,53 @@ fi
 
 
 # Set Chrome options based on user's selection
-# Function to set Chrome launch options for a given service
-set_chrome_launch_options() {
-    local option_var="${1}chromelaunchoptions"
-    local launch_options="run --branch=stable --arch=x86_64 --command=/app/bin/chrome --file-forwarding com.google.Chrome @@u @@ --window-size=1280,800 --force-device-scale-factor=1.00 --device-scale-factor=1.00 --start-fullscreen $2 --no-first-run --enable-features=OverlayScrollbar"
+ENV_FILE="${logged_in_home}/.config/systemd/user/env_vars"
 
-    # Write to environment variables file
-    echo $option_var=$launch_options >> ${logged_in_home}/.config/systemd/user/env_vars
+set_browser_launch_options() {
+    local key="$1"        # netflix, xbox, custom
+    local website="$2"    # optional
+    local option_var="${key}chromelaunchoptions"
+    local launch_options=""
+
+    if [[ "$options" == *"Google Chrome"* ]]; then
+        launch_options="run --branch=stable --arch=x86_64 \
+--command=/app/bin/chrome --file-forwarding com.google.Chrome @@u @@ \
+--window-size=1280,800 --force-device-scale-factor=1.00 \
+--device-scale-factor=1.00 --start-fullscreen --no-first-run \
+--enable-features=OverlayScrollbar"
+
+    elif [[ "$options" == *"Mozilla Firefox"* ]]; then
+        launch_options="run --branch=stable --arch=x86_64 \
+org.mozilla.firefox --kiosk"
+
+    elif [[ "$options" == *"Microsoft Edge"* ]]; then
+        launch_options="run --arch=x86_64 com.microsoft.Edge \
+--window-size=1280,800 --force-device-scale-factor=1.00 \
+--device-scale-factor=1.00 --start-fullscreen --no-first-run"
+
+    elif [[ "$options" == *"Brave"* ]]; then
+        launch_options="run --arch=x86_64 com.brave.Browser \
+--start-fullscreen --window-size=1280,800 \
+--force-device-scale-factor=1.00 --no-first-run \
+--no-default-browser-check \
+--enable-features=OverlayScrollbar,HardwareMediaKeyHandling"
+
+    elif [[ "$options" == *"LibreWolf"* ]]; then
+        launch_options="run --branch=stable --arch=x86_64 \
+io.gitlab.librewolf-community --kiosk"
+
+    elif [[ "$options" == *"Vivaldi"* ]]; then
+        launch_options="run --branch=stable --arch=x86_64 \
+--command=vivaldi com.vivaldi.Vivaldi \
+--start-fullscreen"
+    fi
+
+    # Append URL only if provided
+    if [[ -n "$website" ]]; then
+        launch_options="$launch_options $website"
+    fi
+
+    echo "$option_var=$launch_options" >> "$ENV_FILE"
 }
 
 # Array of options, command names, and corresponding URLs
@@ -3470,6 +3755,7 @@ declare -A services=(
     ["Fortnite"]="fortnite|https://www.xbox.com/en-US/play/games/fortnite/BT5P2X999VH2"
     ["Better xCloud"]="xcloud|https://better-xcloud.github.io"
     ["Venge"]="venge|https://venge.io"
+    ["Super Monkey Ball Online"]="monkey|https://monkeyball-online.pages.dev"
     ["PokéRogue"]="pokerogue|https://pokerogue.net"
     ["Boosteroid Cloud Gaming"]="boosteroid|https://cloud.boosteroid.com"
     ["WebRcade"]="webrcade|https://play.webrcade.com"
@@ -3487,46 +3773,44 @@ declare -A services=(
     ["Cloudy Pad"]="cloudy|https://cloudypad.gg"
 )
 
-# Check user selection and call the function for each option
+
 for option in "${!services[@]}"; do
-    if [[ $options == *"$option"* ]]; then
+    if [[ "$options" == *"$option"* ]]; then
         IFS='|' read -r name url <<< "${services[$option]}"
-        set_chrome_launch_options "$name" "$url"
+        set_browser_launch_options "$name" "$url"
     fi
 done
 
+if [ "${#custom_websites[@]}" -gt 0 ]; then
 
-# Check if any custom websites were provided
-if [ ${#custom_websites[@]} -gt 0 ]; then
-    echo "DEBUG: custom_websites array content: ${custom_websites[@]}"
-    echo "DEBUG: custom_websites array length: ${#custom_websites[@]}"
-
-    # Sanity check: try to split any single string containing commas into multiple array items
-    if [ ${#custom_websites[@]} -eq 1 ] && [[ "${custom_websites[0]}" == *,* ]]; then
+    # Split if comma-separated (legacy safety)
+    if [ "${#custom_websites[@]}" -eq 1 ] && [[ "${custom_websites[0]}" == *,* ]]; then
         IFS=',' read -ra custom_websites <<< "${custom_websites[0]}"
-        echo "DEBUG: Re-split single comma string into array: ${custom_websites[@]}"
+        IFS=',' read -ra custom_website_names <<< "${custom_website_names[0]}"
     fi
 
-    # Strip leading/trailing whitespace from each website
+    # Trim whitespace (URLs)
     for i in "${!custom_websites[@]}"; do
-        # Remove leading/trailing whitespace from each entry
         custom_websites[$i]=$(echo "${custom_websites[$i]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     done
 
-    # Join array with ', ' separator
-    custom_websites_str=""
-    for i in "${!custom_websites[@]}"; do
-        if [ "$i" -gt 0 ]; then
-            custom_websites_str+=", "
-        fi
-        custom_websites_str+="${custom_websites[$i]}"
+    # Trim whitespace (Names)
+    for i in "${!custom_website_names[@]}"; do
+        custom_website_names[$i]=$(echo "${custom_website_names[$i]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     done
 
-    echo "DEBUG: Final custom_websites_str = $custom_websites_str"
+    # Join into strings
+    custom_websites_str=$(IFS=', '; echo "${custom_websites[*]}")
+    custom_website_names_str=$(IFS=', '; echo "${custom_website_names[*]}")
 
-    # Export the properly formatted value to env_vars
-    echo "export custom_websites_str=$custom_websites_str" >> "${logged_in_home}/.config/systemd/user/env_vars"
+    # Export both
+    echo "export custom_websites_str=$custom_websites_str" >> "$ENV_FILE"
+    echo "export custom_website_names_str=$custom_website_names_str" >> "$ENV_FILE"
+
+    set_browser_launch_options "custom"
 fi
+
+
 
 
 
@@ -3813,12 +4097,12 @@ fi
 
 #recieve noooooooooooootes
 # Paths
+# Paths
 proton_dir=$(find -L "${logged_in_home}/.steam/root/compatibilitytools.d" -maxdepth 1 -type d -name "GE-Proton*" | sort -V | tail -n1)
 CSV_FILE="$proton_dir/protonfixes/umu-database.csv"
 echo "$CSV_FILE"
 shortcuts_file="${logged_in_home}/.steam/root/userdata/${steamid3}/config/shortcuts.vdf"
 output_dir="${logged_in_home}/.steam/root/userdata/${steamid3}/2371090/remote"
-descriptions_file="${logged_in_home}/.config/systemd/user/descriptions.json"
 
 # Function to get the current Unix timestamp
 get_current_timestamp() {
@@ -3841,26 +4125,10 @@ urlencode() {
     echo -n "$raw" | jq -sRr @uri
 }
 
-# Function to read descriptions from a file
-read_descriptions() {
-    if [[ -f "$descriptions_file" ]]; then
-        if ! validate_json "$descriptions_file"; then
-            echo "Error: Invalid JSON in descriptions file $descriptions_file"
-            return 1
-        fi
-        cat "$descriptions_file"
-    else
-        echo "Descriptions file does not exist, creating a new one."
-        echo "[]" > "$descriptions_file"  # Create an empty JSON array
-    fi
-}
-
 # Function to fetch all notes from the API at once
 fetch_all_notes_from_api() {
-    # Get the JSON response from the API
     response=$(curl -s "https://nslnotes.onrender.com/api/notes")
 
-    # Check if the response is valid JSON
     if ! jq . <<< "$response" > /dev/null 2>&1; then
         echo "Error: Invalid JSON response from the API"
         return 1
@@ -3873,59 +4141,47 @@ fetch_all_notes_from_api() {
 update_notes_in_file() {
     local file_path="$1"
     local game_name="$2"
-    local api_response="$3"  # All notes are passed in at once
+    local api_response="$3"
 
-    # Sanitize the game name (replace spaces with underscores, etc.)
     sanitized_game_name="$game_name"
     sanitized_game_name="${sanitized_game_name// /_}"
     sanitized_game_name="${sanitized_game_name//[^a-zA-Z0-9]/_}"
 
-    # URL encode the sanitized game name
     encoded_game_name=$(urlencode "$sanitized_game_name")
 
-    # Filter the notes to only get the ones for the current game using `jq`
     filtered_notes=$(echo "$api_response" | jq -r ".[] | select(.\"File Name\" == \"notes_shortcut_${encoded_game_name}\")")
 
-    # If no notes are found for this game, exit early
     if [[ -z "$filtered_notes" ]]; then
         echo "No notes found for game $game_name"
         return
     fi
 
-    # Start with an empty string to hold the formatted content for all notes
     nsl_content=""
 
-    # Loop through the filtered notes for this game
     for note in $(echo "$filtered_notes" | jq -r '@base64'); do
-        # Decode the note
         note_decoded=$(echo "$note" | base64 --decode)
 
-        # Extract the relevant information for each note
         user=$(echo "$note_decoded" | jq -r '."user"')
         content=$(echo "$note_decoded" | jq -r '."Content"')
         time_created=$(echo "$note_decoded" | jq -r '."Time Created"')
 
-        # Clean up content by replacing newline characters with <br> tags
-        content_cleaned=$(echo "$content" | sed 's/\n/<br>/g')
+        content_sanitized=$(echo "$content" | sed 's/\[\/\?p\]//g')
+        content_sanitized=$(echo "$content_sanitized" | sed 's/\n/<br>/g')
 
-        # Construct the content block for this note
-        nsl_content+=$"[p][i]A note called \"$user\" says,[/i][/p][p][b]$content_cleaned[/b][/p][p]$time_created[/p][p][/p]"
+        nsl_content+=$"[p][i]A note called \"$user\" says,[/i][/p]"
+        nsl_content+=$"[p]$content_sanitized[/p]"
+        nsl_content+=$"[p]$time_created[/p]"
     done
 
-    # Generate the current timestamp
     local current_time=$(get_current_timestamp)
 
-    # Get the game details from the CSV file
     game_details=$(grep -i "$game_name" "$CSV_FILE")
 
-    # If no details are found, use default values for the game
     if [[ -z "$game_details" ]]; then
         game_details="N/A,N/A,N/A,N/A,N/A,N/A"
     fi
 
-    # Loop through each matching result and print each field without colons
     echo "$game_details" | while IFS=',' read -r title store codename umu_id common_acronym note; do
-        # Handle missing fields by replacing them with "N/A"
         title=${title:-N/A}
         store=${store:-N/A}
         codename=${codename:-N/A}
@@ -3933,60 +4189,38 @@ update_notes_in_file() {
         common_acronym=${common_acronym:-N/A}
         note=${note:-N/A}
 
-        # Construct the Proton-GE note with the game details
         proton_ge_content="[p]Title: $title[/p][p]Store: $store[/p][p]Codename: $codename[/p][p]UMU ID: $umu_id[/p][p]Common Acronym: $common_acronym[/p][p]Note: $note[/p]"
 
-        # Construct the notes using jq (dynamically including the new Proton-GE content)
         local note_1=$(jq -n --arg shortcut_name "$game_name" --argjson time_created "$current_time" --arg proton_ge_content "$proton_ge_content" \
             '{"id":"note1675","shortcut_name":$shortcut_name,"ordinal":0,"time_created":$time_created,"time_modified":$time_created,"title":"Proton-GE & UMU","content":$proton_ge_content}')
 
         local note_2=$(jq -n --arg shortcut_name "$game_name" --argjson time_created "$current_time" --arg nsl_content "$nsl_content" \
             '{"id":"note2675","shortcut_name":$shortcut_name,"ordinal":0,"time_created":$time_created,"time_modified":$time_created,"title":"NSL Community Notes","content":$nsl_content}')
 
-        # Read the descriptions from the JSON file
-        descriptions=$(read_descriptions)
-
-        # Find the description for the current game
-        game_description=$(echo "$descriptions" | jq -r ".[] | select(.game_name == \"$game_name\") | .about_the_game")
-
-        # Use a default description if none is found
-        if [[ -z "$game_description" ]]; then
-            game_description="No description found in the JSON file."
-        fi
-
-        #create a description note
-        local note_3=$(jq -n --arg shortcut_name "$game_name" --argjson time_created "$current_time" --arg game_description "$game_description" \
-            '{"id":"note3675","shortcut_name":$shortcut_name,"ordinal":0,"time_created":$time_created,"time_modified":$time_created,"title":"Game Description","content":$game_description}')
-
-            # Check if the file exists and is valid
-            if [[ -f "$file_path" ]]; then
-                # Validate if the file contains valid JSON
-                if validate_json "$file_path"; then
-                    # Check if the file contains an array of notes
-                    if jq -e '.notes | type == "array"' "$file_path" > /dev/null; then
-                        # Replace the existing notes with the new ones on top
-                        jq --argjson note1 "$note_1" --argjson note2 "$note_2" --argjson note3 "$note_3" \
-                            '.notes = [$note1, $note2, $note3] + (.notes | map(select(.id != "note1675" and .id != "note2675" and .id != "note3675")))' \
-                            "$file_path" > "$file_path.tmp" && mv "$file_path.tmp" "$file_path"
-                        echo "Replaced Proton, NSL Community Notes, and Description Notes in $file_path"
-                    else
-                        echo "Error: The 'notes' field is not an array or is missing in $file_path."
-                        return 1
-                    fi
+        if [[ -f "$file_path" ]]; then
+            if validate_json "$file_path"; then
+                if jq -e '.notes | type == "array"' "$file_path" > /dev/null; then
+                    jq --argjson note1 "$note_1" --argjson note2 "$note_2" \
+                        '.notes = [$note1, $note2] + (.notes | map(select(.id != "note1675" and .id != "note2675")))' \
+                        "$file_path" > "$file_path.tmp" && mv "$file_path.tmp" "$file_path"
+                    echo "Replaced Proton and NSL Community Notes in $file_path"
                 else
-                    echo "Invalid JSON. Skipping update."
-                    return 1  # Exit if the JSON is invalid
+                    echo "Error: The 'notes' field is not an array or is missing in $file_path."
+                    return 1
                 fi
             else
-                # Create a new file with the notes structure if the file does not exist
-                if jq -n --argjson note1 "$note_1" --argjson note2 "$note_2" --argjson note3 "$note_3" \
-                    '{"notes":[$note1, $note2, $note3]}' > "$file_path"; then
-                    echo "Created new file with notes: $file_path"
-                else
-                    echo "Error creating file: $file_path"
-                    return 1  # Exit if the file creation fails
-                fi
+                echo "Invalid JSON. Skipping update."
+                return 1
             fi
+        else
+            if jq -n --argjson note1 "$note_1" --argjson note2 "$note_2" \
+                '{"notes":[$note1, $note2]}' > "$file_path"; then
+                echo "Created new file with notes: $file_path"
+            else
+                echo "Error creating file: $file_path"
+                return 1
+            fi
+        fi
     done
 }
 
@@ -4001,20 +4235,16 @@ list_game_names() {
 
     echo "Reading game names from $shortcuts_file..."
 
-    # Reset games array
     games=()
 
-    # Parse shortcuts.vdf for appname entries
     mapfile -t lines < <(tr '\0\1\2' '\n\n\n' < "$shortcuts_file" | grep -v '^$')
 
     for ((i=0; i < ${#lines[@]} - 1; i++)); do
         if [[ "${lines[i],,}" == "appname" ]]; then
             local appname="${lines[i+1]}"
-            # Trim whitespace
-            appname="${appname#"${appname%%[![:space:]]*}"}"  # leading
-            appname="${appname%"${appname##*[![:space:]]}"}"  # trailing
+            appname="${appname#"${appname%%[![:space:]]*}"}"
+            appname="${appname%"${appname##*[![:space:]]}"}"
 
-            # Skip if appname matches skip extensions (case-insensitive)
             if [[ -n "$appname" && ! "${appname,,}" =~ $skip_ext ]]; then
                 games+=("$appname")
                 echo "Added game: $appname"
@@ -4027,21 +4257,17 @@ list_game_names() {
     return 0
 }
 
-# Main process
 echo "Starting script..."
 
-# Fetch all notes from the API once
 api_response=$(fetch_all_notes_from_api)
 if [[ $? -ne 0 ]]; then
     echo "Failed to fetch all notes from the API"
     exit 1
 fi
 
-list_game_names  # Get the list of game names
+list_game_names
 
-# Loop over each game name
 for game_name in "${games[@]}"; do
-    # Create the file path for each game
     sanitized_game_name="$game_name"
     sanitized_game_name="${sanitized_game_name//\(/_}"
     sanitized_game_name="${sanitized_game_name//\)/_}"
@@ -4054,6 +4280,7 @@ done
 
 echo "Notes execution complete."
 show_message "Notes have been recieved!"
+
 #noooooooooooooooootes
 
 
